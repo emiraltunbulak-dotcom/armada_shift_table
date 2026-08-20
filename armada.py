@@ -92,7 +92,7 @@ st.markdown(f"""
     <img src="{LOGO_DATA_URI}" class="logo-img" alt="Logo">
     <div>
         <h1 class="header-title">Armada Starbucks Vardiya & Aylık Raporlama Yönetimi</h1>
-        <p class="header-sub">EXACT WEEKLY & MONTHLY SHIFT SYSTEM</p>
+        <p class="header-sub">STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -167,8 +167,8 @@ def format_hour(h):
         return f"{int(h)}s"
     return f"{h:.1f}s"
 
-# HAFTALIK VE AYLIK KESİN KOTA MOTORU
-def generate_weekly_balanced_schedule(year, month, seed=None):
+# %100 KESİN KOTA GARANTİLİ VARDİYA MOTORU
+def generate_exact_quota_schedule(year, month, seed=None):
     if seed is None:
         seed = year * 100 + month
     rng = random.Random(seed)
@@ -185,145 +185,125 @@ def generate_weekly_balanced_schedule(year, month, seed=None):
             "col_name": f"{DAY_NAMES_TR[weekday_idx]} ({day})"
         })
         
-    full_schedule = {emp["name"]: [OFF] * num_days for emp in EMPLOYEES}
+    mgr_names = ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]
+    ft_baristas = [
+        "Ceyda Işık", "Yusuf Efe Aydoğmuş", "Cansu Elibüyük", "Elif Karaca",
+        "Vahti Ünal", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren",
+        "Buse Kayabalı", "Ayça Yiğit"
+    ]
+    pt_baristas = ["Emir Altunbulak", "Hayrunnisa Erdoğan"]
+    all_names = mgr_names + ft_baristas + pt_baristas
     
-    # 4 Temel Hafta Blokları (Her Hafta FT=45s, PT=28s)
-    total_weeks = (num_days + 6) // 7
+    full_schedule = {name: [OFF] * num_days for name in all_names}
     
-    for w_idx in range(total_weeks):
-        start_d = w_idx * 7
-        end_d = min((w_idx + 1) * 7, num_days)
-        w_len = end_d - start_d
-        
-        # 1. Müdürler (Haftada 1 OFF, 6 gün iş = 45s)
-        mgr_names = ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]
-        mgr_off_days = [2, 3, 4] # Çar, Per, Cum
-        rng.shuffle(mgr_off_days)
-        
-        for m_i, m_name in enumerate(mgr_names):
-            m_off_rel = mgr_off_days[m_i]
-            for rel_d in range(w_len):
-                abs_d = start_d + rel_d
-                if rel_d == m_off_rel:
-                    full_schedule[m_name][abs_d] = OFF
-                else:
-                    # Açılış / Kapanış / Ara Dağılımı
-                    w_day = days_info[abs_d]["weekday_idx"]
-                    if w_day in [2, 3, 4]:
-                        full_schedule[m_name][abs_d] = A_MGR if (m_i % 2 == 0) else K_MGR
-                    else:
-                        roles = [A_MGR, MID_MGR, K_MGR]
-                        full_schedule[m_name][abs_d] = roles[(rel_d + m_i) % 3]
+    # 1. PART-TIME BARİSTALAR: KESİN 16 GÜN (16 * 7.0 = 112.0s)
+    for pt in pt_baristas:
+        work_days = sorted(rng.sample(range(num_days), 16))
+        for d in work_days:
+            w = days_info[d]["weekday_idx"]
+            if pt == "Emir Altunbulak":
+                full_schedule[pt][d] = A_PT if w in [0, 2, 4, 6] else K_PT
+            else:
+                full_schedule[pt][d] = A_PT if w in [1, 3, 5] else K_PT
 
-        # 2. PT Baristalar (Haftada KESİN 4 Gün İş = 28s, 3 Gün OFF)
-        # Emir ve Hayrunnisa
-        emir_work_rel = set(rng.sample(range(w_len), min(4, w_len)))
-        hayru_work_rel = set(rng.sample(range(w_len), min(4, w_len)))
-        
-        for rel_d in range(w_len):
-            abs_d = start_d + rel_d
-            w_day = days_info[abs_d]["weekday_idx"]
-            if rel_d in emir_work_rel:
-                full_schedule["Emir Altunbulak"][abs_d] = A_PT if (w_day in [0, 2, 4, 6]) else K_PT
-            else:
-                full_schedule["Emir Altunbulak"][abs_d] = OFF
-                
-            if rel_d in hayru_work_rel:
-                full_schedule["Hayrunnisa Erdoğan"][abs_d] = A_PT if (w_day in [1, 3, 5]) else K_PT
-            else:
-                full_schedule["Hayrunnisa Erdoğan"][abs_d] = OFF
+    # 2. MÜDÜRLER: KESİN 24 GÜN (24 * 7.5 = 180.0s)
+    for m in mgr_names:
+        work_days = sorted(rng.sample(range(num_days), 24))
+        for d in work_days:
+            full_schedule[m][d] = "WORK"
+            
+    for d in range(num_days):
+        working_m = [m for m in mgr_names if full_schedule[m][d] == "WORK"]
+        rng.shuffle(working_m)
+        if len(working_m) == 3:
+            full_schedule[working_m[0]][d] = A_MGR
+            full_schedule[working_m[1]][d] = MID_MGR
+            full_schedule[working_m[2]][d] = K_MGR
+        elif len(working_m) == 2:
+            full_schedule[working_m[0]][d] = A_MGR
+            full_schedule[working_m[1]][d] = K_MGR
+        elif len(working_m) == 1:
+            full_schedule[working_m[0]][d] = A_MGR
 
-        # 3. FT Baristalar (Her biri haftada KESİN 1 OFF = 45s)
-        ft_baristas = [
-            "Cansu Elibüyük", "Buse Kayabalı", "Vahti Ünal", "Ceyda Işık",
-            "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel",
-            "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"
-        ]
+    # 3. CANSU ELİBÜYÜK: KESİN 24 GÜN (Hafta içi Açılış, Hafta sonu Kapanış, Asla Aracı Yok)
+    elibuyuk_work = sorted(rng.sample(range(num_days), 24))
+    for d in elibuyuk_work:
+        w = days_info[d]["weekday_idx"]
+        full_schedule["Cansu Elibüyük"][d] = K_FT if w in [5, 6] else A_FT
         
-        # Her FT'ye haftada tam 1 gün OFF dağıt
-        ft_offs = {}
-        # Cansu Elibüyük hafta içi OFF olsun (Salı veya Çarşamba)
-        elibuyuk_off_rel = rng.choice([1, 2, 3]) if w_len > 3 else 0
-        ft_offs["Cansu Elibüyük"] = elibuyuk_off_rel
-        # Buse Kayabalı, Elibüyük ile farklı gün OFF olsun
-        buse_avail_offs = [x for x in range(w_len) if x != elibuyuk_off_rel]
-        ft_offs["Buse Kayabalı"] = rng.choice(buse_avail_offs)
+    # 4. VAHTİ ÜNAL: KESİN 24 GÜN (Hafta içi ve hafta sonu hep Kapanış)
+    vahti_work = sorted(rng.sample(range(num_days), 24))
+    for d in vahti_work:
+        full_schedule["Vahti Ünal"][d] = K_FT
         
-        remaining_ft = [b for b in ft_baristas if b not in ["Cansu Elibüyük", "Buse Kayabalı"]]
-        for b in remaining_ft:
-            ft_offs[b] = rng.randint(0, w_len - 1)
+    # 5. BUSE KAYABALI: KESİN 24 GÜN (Elibüyük'ün Hafta İçi OFF olduğu günlerde MUTLAKA Açılış)
+    elibuyuk_offs_weekday = [d for d in range(num_days) if full_schedule["Cansu Elibüyük"][d] == OFF and days_info[d]["weekday_idx"] < 5]
+    buse_work = set(elibuyuk_offs_weekday)
+    pool = [d for d in range(num_days) if d not in buse_work]
+    buse_work.update(rng.sample(pool, 24 - len(buse_work)))
+    for d in buse_work:
+        w = days_info[d]["weekday_idx"]
+        if d in elibuyuk_offs_weekday:
+            full_schedule["Buse Kayabalı"][d] = A_FT
+        else:
+            full_schedule["Buse Kayabalı"][d] = A_FT if w in [0, 2] else K_FT
+
+    # 6. DİĞER FT BARİSTALAR: KESİN 24 GÜN (Ceyda & Yusuf çakışmaz, ardı ardına aracı olmaz)
+    other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
+    for ft in other_ft:
+        work_days = sorted(rng.sample(range(num_days), 24))
+        for d in work_days:
+            full_schedule[ft][d] = "WORK"
             
-        for rel_d in range(w_len):
-            abs_d = start_d + rel_d
-            w_day = days_info[abs_d]["weekday_idx"]
-            is_weekend = (w_day in [5, 6])
-            
-            # Cansu Elibüyük Kuralı: Hafta içi hep Açılış, Hafta sonu hep Kapanış, Asla Aracı Yok
-            if rel_d == ft_offs["Cansu Elibüyük"]:
-                full_schedule["Cansu Elibüyük"][abs_d] = OFF
-            else:
-                full_schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
+    for d in range(num_days):
+        w = days_info[d]["weekday_idx"]
+        is_weekend = (w in [5, 6])
+        
+        assigned_open = [name for name in all_names if full_schedule[name][d] in [A_MGR, A_FT, A_PT]]
+        assigned_close = [name for name in all_names if full_schedule[name][d] in [K_MGR, K_FT, K_PT]]
+        
+        needed_open = max(0, 4 - len(assigned_open)) # 1 mgr + 3 barista = 4
+        needed_close = max(0, (6 if is_weekend else 5) - len(assigned_close)) # 5 hafta içi, 6 hafta sonu
+        
+        working_unassigned = [ft for ft in other_ft if full_schedule[ft][d] == "WORK"]
+        rng.shuffle(working_unassigned)
+        
+        # Açılış Baristaları
+        for ft in working_unassigned:
+            if needed_open > 0:
+                if not is_weekend and ft == "Yusuf Efe Aydoğmuş" and ("Ceyda Işık" in assigned_open or full_schedule["Ceyda Işık"][d] == A_FT):
+                    continue
+                if not is_weekend and ft == "Ceyda Işık" and ("Yusuf Efe Aydoğmuş" in assigned_open or full_schedule["Yusuf Efe Aydoğmuş"][d] == A_FT):
+                    continue
+                full_schedule[ft][d] = A_FT
+                assigned_open.append(ft)
+                needed_open -= 1
                 
-            # Buse Kayabalı Kuralı: Elibüyük OFF iken Buse MUTLAKA Açılış
-            if rel_d == ft_offs["Buse Kayabalı"]:
-                full_schedule["Buse Kayabalı"][abs_d] = OFF
-            else:
-                if rel_d == elibuyuk_off_rel and not is_weekend:
-                    full_schedule["Buse Kayabalı"][abs_d] = A_FT
-                else:
-                    full_schedule["Buse Kayabalı"][abs_d] = A_FT if (w_day in [0, 2]) else K_FT
-                    
-            # Vahti Ünal Kuralı: Hafta içi ve hafta sonu hep Kapanış
-            if rel_d == ft_offs["Vahti Ünal"]:
-                full_schedule["Vahti Ünal"][abs_d] = OFF
-            else:
-                full_schedule["Vahti Ünal"][abs_d] = K_FT
+        # Kapanış Baristaları
+        remaining_unassigned = [ft for ft in working_unassigned if full_schedule[ft][d] == "WORK"]
+        for ft in remaining_unassigned:
+            if needed_close > 0:
+                full_schedule[ft][d] = K_FT
+                assigned_close.append(ft)
+                needed_close -= 1
                 
-            # Diğer FT Baristalar
-            other_names = [b for b in remaining_ft if b != "Vahti Ünal"]
-            
-            current_openers = [b for b in full_schedule.keys() if full_schedule[b][abs_d] in [A_FT, A_PT]]
-            current_closers = [b for b in full_schedule.keys() if full_schedule[b][abs_d] in [K_FT, K_PT]]
-            
-            needed_open = max(0, 3 - len(current_openers))
-            needed_close = max(0, (5 if is_weekend else 4) - len(current_closers))
-            
-            avail_today = [b for b in other_names if rel_d != ft_offs[b]]
-            rng.shuffle(avail_today)
-            
-            # Açılış Baristaları (Denetim Kuralı: Ceyda & Yusuf Hafta İçi Açılışta Birlikte Olamaz)
-            for b in avail_today:
-                if needed_open > 0:
-                    if not is_weekend and b == "Yusuf Efe Aydoğmuş" and ("Ceyda Işık" in current_openers or full_schedule["Ceyda Işık"][abs_d] == A_FT):
-                        continue
-                    if not is_weekend and b == "Ceyda Işık" and ("Yusuf Efe Aydoğmuş" in current_openers or full_schedule["Yusuf Efe Aydoğmuş"][abs_d] == A_FT):
-                        continue
-                    full_schedule[b][abs_d] = A_FT
-                    needed_open -= 1
-                    
-            # Kapanış Baristaları
-            unassigned = [b for b in avail_today if full_schedule[b][abs_d] == OFF]
-            for b in unassigned:
-                if needed_close > 0:
-                    full_schedule[b][abs_d] = K_FT
-                    needed_close -= 1
-                    
-            # Aracı Vardiyalar (Arka arkaya aracı olmama kuralı)
-            extras = [b for b in unassigned if full_schedule[b][abs_d] == OFF]
-            assigned_ara = 0
-            for b in extras:
-                prev_was_ara = (abs_d > 0 and full_schedule[b][abs_d-1] in [ARA_10, ARA_12])
-                if not prev_was_ara and assigned_ara == 0:
-                    full_schedule[b][abs_d] = ARA_12
-                    assigned_ara += 1
-                elif not prev_was_ara and assigned_ara == 1:
-                    full_schedule[b][abs_d] = ARA_10
-                    assigned_ara += 1
-                else:
-                    full_schedule[b][abs_d] = K_FT if is_weekend else A_FT
+        # Aracı Vardiyalar (Arka arkaya aracı olmama kuralı)
+        extras = [ft for ft in remaining_unassigned if full_schedule[ft][d] == "WORK"]
+        assigned_ara = 0
+        for ft in extras:
+            prev_was_ara = (d > 0 and full_schedule[ft][d-1] in [ARA_10, ARA_12])
+            if not prev_was_ara and assigned_ara == 0:
+                full_schedule[ft][d] = ARA_12
+                assigned_ara += 1
+            elif not prev_was_ara and assigned_ara == 1:
+                full_schedule[ft][d] = ARA_10
+                assigned_ara += 1
+            else:
+                full_schedule[ft][d] = K_FT if is_weekend else A_FT
 
     # Haftalık Bölümlere Ayır
     weeks_dict = {}
+    total_weeks = (num_days + 6) // 7
     for w in range(total_weeks):
         start_d = w * 7
         end_d = min((w + 1) * 7, num_days)
@@ -372,7 +352,7 @@ if "app_store" not in st.session_state:
 if month_key not in st.session_state.app_store:
     st.session_state.app_store[month_key] = {
         w: df.to_dict(orient="records") 
-        for w, df in generate_weekly_balanced_schedule(sel_year, sel_month).items()
+        for w, df in generate_exact_quota_schedule(sel_year, sel_month).items()
     }
     save_month_store(month_key, {w: pd.DataFrame(d) for w, d in st.session_state.app_store[month_key].items()})
 
@@ -380,7 +360,7 @@ with c_gen:
     st.write("")
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
-        new_w = generate_weekly_balanced_schedule(sel_year, sel_month, seed=new_seed)
+        new_w = generate_exact_quota_schedule(sel_year, sel_month, seed=new_seed)
         save_month_store(month_key, new_w)
         st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
         st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı dinamik vardiya başarıyla üretildi!")
@@ -592,7 +572,7 @@ def get_report_html():
             <button onclick="window.print()" style="padding: 8px 16px; background-color: #006241; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🖨️ PDF Olarak Kaydet / Yazdır</button>
         </div>
         <h1>☕ Armada Starbucks - {MONTH_NAMES_TR[sel_month-1]} {sel_year} Aylık Vardiya & Performans Raporu</h1>
-        <p class="sub">Haftalık 45s (FT) ve 28s (PT) Kotalı Net Çalışma Çizelgesi</p>
+        <p class="sub">Kesin 180s (FT) ve 112s (PT) Kotalı Net Çalışma Çizelgesi</p>
         
         <h2>📊 Aylık Partner Çalışma ve İstatistik Tablosu</h2>
         <table>
