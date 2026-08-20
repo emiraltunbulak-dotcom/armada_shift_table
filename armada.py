@@ -5,6 +5,7 @@ import os
 import re
 import base64
 import calendar
+import random
 from datetime import datetime
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
@@ -57,7 +58,7 @@ st.markdown(f"""
     .header-container {{
         position: relative;
         z-index: 1;
-        display: center;
+        display: flex;
         align-items: center;
         gap: 18px;
         margin-bottom: 20px;
@@ -91,7 +92,7 @@ st.markdown(f"""
     <img src="{LOGO_DATA_URI}" class="logo-img" alt="Logo">
     <div>
         <h1 class="header-title">Armada Starbucks Vardiya & Aylık Raporlama Yönetimi</h1>
-        <p class="header-sub">STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
+        <p class="header-sub">DYNAMIC STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -166,7 +167,11 @@ def format_hour(h):
         return f"{int(h)}s"
     return f"{h:.1f}s"
 
-def generate_strict_armada_schedule(year, month):
+def generate_intelligent_store_schedule(year, month, seed=None):
+    if seed is None:
+        seed = year * 100 + month
+    rng = random.Random(seed)
+    
     num_days = calendar.monthrange(year, month)[1]
     
     days_info = []
@@ -178,53 +183,71 @@ def generate_strict_armada_schedule(year, month):
             "weekday_name": DAY_NAMES_TR[weekday_idx],
             "col_name": f"{DAY_NAMES_TR[weekday_idx]} ({day})"
         })
-    
+        
     mgr_names = ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]
-    mgr_sched = {m: [OFF] * num_days for m in mgr_names}
+    ft_names = [e["name"] for e in EMPLOYEES if e["tip"] == "FT"]
     
+    full_schedule = {emp["name"]: [OFF] * num_days for emp in EMPLOYEES}
+    
+    # 1. Dinamik Müdür Rotasyonu (Her gün 1 Açılış, 1 Kapanış, 3. müdür çalışıyorsa 09:00-17:30)
+    # Haftalık 1 gün dönüşümlü OFF
     for d in range(num_days):
-        off_m_idx = d % 3
-        working_m = [i for i in range(3) if i != off_m_idx]
-        op_m = working_m[d % 2]
-        cl_m = working_m[(d + 1) % 2]
-        
-        mgr_sched[mgr_names[op_m]][d] = A_MGR
-        mgr_sched[mgr_names[cl_m]][d] = K_MGR
-        
-        if d >= 24 and num_days > 28 and (d % 4 == 0):
-            mgr_sched[mgr_names[off_m_idx]][d] = MID_MGR
-
-    barista_names = [e["name"] for e in EMPLOYEES if e["role"] == "Barista"]
-    barista_sched = {b: [OFF] * num_days for b in barista_names}
-    
-    pt_days_emir = set(range(0, num_days, 2)[:16])
-    pt_days_hayru = set(range(1, num_days, 2)[:16])
+        w = days_info[d]["weekday_idx"]
+        # Müdür OFF günleri rotasyonu
+        if w == 2: # Çarşamba -> Banu OFF
+            full_schedule[mgr_names[0]][d] = A_MGR if (d % 2 == 0) else K_MGR
+            full_schedule[mgr_names[1]][d] = OFF
+            full_schedule[mgr_names[2]][d] = K_MGR if (d % 2 == 0) else A_MGR
+        elif w == 3: # Perşembe -> Onur OFF
+            full_schedule[mgr_names[0]][d] = OFF
+            full_schedule[mgr_names[1]][d] = A_MGR if (d % 2 == 0) else K_MGR
+            full_schedule[mgr_names[2]][d] = K_MGR if (d % 2 == 0) else A_MGR
+        elif w == 4: # Cuma -> Göktuğ OFF
+            full_schedule[mgr_names[0]][d] = A_MGR if (d % 2 == 0) else K_MGR
+            full_schedule[mgr_names[1]][d] = K_MGR if (d % 2 == 0) else A_MGR
+            full_schedule[mgr_names[2]][d] = OFF
+        else:
+            # 3 Müdür de çalışıyor: 1 Açılış, 1 Kapanış, 1 Ara Yönetici (09:00-17:30)
+            roles = [A_MGR, MID_MGR, K_MGR]
+            shift_order = [(d + 0) % 3, (d + 1) % 3, (d + 2) % 3]
+            for m_idx in range(3):
+                full_schedule[mgr_names[m_idx]][d] = roles[shift_order[m_idx]]
+                
+    # 2. PT Baristalar (Emir ve Hayrunnisa - Tam 16 Gün * 7s = 112s)
+    pt_days_emir = set(range(0, min(num_days, 32), 2)[:16])
+    pt_days_hayru = set(range(1, min(num_days, 32), 2)[:16])
     
     for d in pt_days_emir:
-        w_idx = days_info[d]["weekday_idx"]
-        barista_sched["Emir Altunbulak"][d] = A_PT if w_idx in [0, 2, 4, 6] else K_PT
+        w = days_info[d]["weekday_idx"]
+        full_schedule["Emir Altunbulak"][d] = A_PT if w in [0, 2, 5] else K_PT
         
     for d in pt_days_hayru:
-        w_idx = days_info[d]["weekday_idx"]
-        barista_sched["Hayrunnisa Erdoğan"][d] = A_PT if w_idx in [1, 3, 5] else K_PT
+        w = days_info[d]["weekday_idx"]
+        full_schedule["Hayrunnisa Erdoğan"][d] = A_PT if w in [1, 3, 6] else K_PT
         
-    ft_baristas = [b for b in barista_names if b not in ["Emir Altunbulak", "Hayrunnisa Erdoğan"]]
-    
+    # 3. FT Baristalar (Dinamik & Karışık Dağılım Motoru)
+    # Her gün: Tam 3 Barista Açılış. Hafta içi 4 Barista Kapanış, Hafta sonu 5 Barista Kapanış (Müdürle toplam 6).
+    # Kalan personeller 10:00 ve 12:00 araçısı.
     for d in range(num_days):
-        w_idx = days_info[d]["weekday_idx"]
-        is_weekend = (w_idx in [5, 6])
+        w = days_info[d]["weekday_idx"]
+        is_weekend = (w in [5, 6])
         
-        pt_openers = [b for b in ["Emir Altunbulak", "Hayrunnisa Erdoğan"] if barista_sched[b][d] == A_PT]
-        pt_closers = [b for b in ["Emir Altunbulak", "Hayrunnisa Erdoğan"] if barista_sched[b][d] == K_PT]
+        # Günün PT durumu
+        pt_openers = [p for p in ["Emir Altunbulak", "Hayrunnisa Erdoğan"] if full_schedule[p][d] == A_PT]
+        pt_closers = [p for p in ["Emir Altunbulak", "Hayrunnisa Erdoğan"] if full_schedule[p][d] == K_PT]
         
         needed_ft_open = 3 - len(pt_openers)
         needed_ft_close = (5 if is_weekend else 4) - len(pt_closers)
         
+        # Her gün dönüşümlü 1-2 kişiye haftalık OFF verilir
         avail_ft = []
-        for b_idx, b_name in enumerate(ft_baristas):
-            if (d + b_idx) % 7 != 0:
-                avail_ft.append(b_name)
-                
+        for idx, ft_name in enumerate(ft_names):
+            if (d + idx * 2) % 7 != 0:
+                avail_ft.append(ft_name)
+        
+        rng.shuffle(avail_ft)
+        
+        # Açılış Baristaları (Denetim Kuralı: Ceyda & Yusuf hafta içi aynı gün açılış olamaz)
         openers_today = []
         for b in avail_ft:
             if len(openers_today) < needed_ft_open:
@@ -233,28 +256,40 @@ def generate_strict_armada_schedule(year, month):
                 if not is_weekend and b == "Ceyda Işık" and "Yusuf Efe Aydoğmuş" in openers_today:
                     continue
                 openers_today.append(b)
-                barista_sched[b][d] = A_FT
+                full_schedule[b][d] = A_FT
                 
+        # Kapanış Baristaları
         closers_today = []
         remaining_ft = [b for b in avail_ft if b not in openers_today]
         for b in remaining_ft:
             if len(closers_today) < needed_ft_close:
                 closers_today.append(b)
-                barista_sched[b][d] = K_FT
+                full_schedule[b][d] = K_FT
                 
+        # Fazla Baristalar ➔ Çift Aracı (10:00 ve 12:00)
         extras = [b for b in remaining_ft if b not in closers_today]
         if len(extras) >= 1:
-            barista_sched[extras[0]][d] = ARA_12
+            full_schedule[extras[0]][d] = ARA_12
         if len(extras) >= 2:
-            barista_sched[extras[1]][d] = ARA_10
+            full_schedule[extras[1]][d] = ARA_10
         if len(extras) >= 3:
             for extra_b in extras[2:]:
-                barista_sched[extra_b][d] = OFF
+                full_schedule[extra_b][d] = OFF
                 
-    full_dict = {}
-    full_dict.update(mgr_sched)
-    full_dict.update(barista_sched)
-    
+    # 28 günden sonraki günlerde personelin 180s/112s kotasını korumak için dengeleme
+    if num_days > 28:
+        for p_name, shifts in full_schedule.items():
+            emp_info = next(e for e in EMPLOYEES if e["name"] == p_name)
+            max_limit = emp_info["quota"]
+            curr_hours = sum(calculate_net_hours(s) for s in shifts)
+            if curr_hours > max_limit:
+                diff_shifts = int((curr_hours - max_limit) / (7.0 if emp_info["tip"] == "PT" else 7.5))
+                for extra_day in range(28, num_days):
+                    if diff_shifts > 0 and shifts[extra_day] not in [OFF, ""]:
+                        shifts[extra_day] = OFF
+                        diff_shifts -= 1
+
+    # Haftalara Böl
     weeks_dict = {}
     total_weeks = (num_days + 6) // 7
     for w in range(total_weeks):
@@ -268,7 +303,7 @@ def generate_strict_armada_schedule(year, month):
         })
         for d_idx in range(start_d, end_d):
             col_name = days_info[d_idx]["col_name"]
-            df_w[col_name] = [full_dict[emp["name"]][d_idx] for emp in EMPLOYEES]
+            df_w[col_name] = [full_schedule[emp["name"]][d_idx] for emp in EMPLOYEES]
         weeks_dict[w_name] = df_w
         
     return weeks_dict
@@ -305,17 +340,18 @@ if "app_store" not in st.session_state:
 if month_key not in st.session_state.app_store:
     st.session_state.app_store[month_key] = {
         w: df.to_dict(orient="records") 
-        for w, df in generate_strict_armada_schedule(sel_year, sel_month).items()
+        for w, df in generate_intelligent_store_schedule(sel_year, sel_month).items()
     }
     save_month_store(month_key, {w: pd.DataFrame(d) for w, d in st.session_state.app_store[month_key].items()})
 
 with c_gen:
     st.write("")
-    if st.button("🤖 Seçilen Ayın Vardiyasını Sıfırdan Üret", use_container_width=True, type="primary"):
-        new_w = generate_strict_armada_schedule(sel_year, sel_month)
+    if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
+        new_seed = random.randint(1, 999999)
+        new_w = generate_intelligent_store_schedule(sel_year, sel_month, seed=new_seed)
         save_month_store(month_key, new_w)
         st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} vardiyası kesin kurallarla yeniden üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tamamen yeni ve karışık vardiya oluşturuldu!")
         st.rerun()
 
 current_month_weeks = {w: pd.DataFrame(data) for w, data in st.session_state.app_store[month_key].items()}
