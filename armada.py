@@ -4,12 +4,13 @@ import json
 import os
 import re
 import base64
+import calendar
+from datetime import datetime
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
 
 SAVE_FILE = os.path.expanduser("~/Desktop/starbucks_armada_data.json")
 
-# Resmi Starbucks Logosu (Base64 SVG)
 STARBUCKS_LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
   <circle cx="250" cy="250" r="248" fill="#006241"/>
   <circle cx="250" cy="250" r="195" fill="#006241" stroke="#ffffff" stroke-width="6"/>
@@ -113,10 +114,10 @@ EMPLOYEES = [
     {"name": "Yusuf Efe Aydoğmuş", "tip": "FT", "role": "Barista", "quota": 180},
 ]
 
-WEEK_DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
-WEEKS = ["1. Hafta (1-7)", "2. Hafta (8-14)", "3. Hafta (15-21)", "4. Hafta (22-28)"]
+DAY_NAMES_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+MONTH_NAMES_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
 
-# Vardiya Tanımları
+# Vardiyalar
 A_MGR = "07:30-16:00"
 K_MGR = "15:30-00:00"
 MID_MGR = "09:00-17:30"
@@ -134,7 +135,7 @@ def calculate_net_hours(shift_str):
     s = str(shift_str).strip().upper()
     if not s or s in ["OFF", "BOŞ", "-", "0", "NONE"]:
         return 0.0
-    if "RAPOR" in s or "İZİN" in s or "DOĞUM" in s:
+    if "RAPOR" in s or "İZİN" in s:
         return 7.5
     match = re.search(r'(\d{1,2})[:.](\d{2})\s*[-–]\s*(\d{1,2})[:.](\d{2})', s)
     if match:
@@ -166,168 +167,172 @@ def format_hour(h):
         return f"{int(h)}s"
     return f"{h:.1f}s"
 
-def generate_armada_rule_based_schedule():
-    # 28 Günlük Kural Motoru
-    schedule = {emp["name"]: [] for emp in EMPLOYEES}
+def generate_month_schedule_algorithm(year, month):
+    num_days = calendar.monthrange(year, month)[1]
     
-    # 1. Müdür Rotasyonu (Haftalık 1 OFF, birbirini döndürme, 3. müdür 09:00-17:30)
-    # Günlük: [Onur, Banu, Göktuğ]
-    mgr_patterns = [
-        # Hafta 1
-        [A_MGR, K_MGR, OFF], [K_MGR, OFF, A_MGR], [OFF, A_MGR, K_MGR],
-        [A_MGR, K_MGR, MID_MGR], [MID_MGR, A_MGR, K_MGR], [K_MGR, MID_MGR, A_MGR], [A_MGR, K_MGR, MID_MGR],
-        # Hafta 2
-        [K_MGR, A_MGR, OFF], [OFF, K_MGR, A_MGR], [A_MGR, OFF, K_MGR],
-        [MID_MGR, A_MGR, K_MGR], [A_MGR, MID_MGR, K_MGR], [K_MGR, A_MGR, MID_MGR], [MID_MGR, K_MGR, A_MGR],
-        # Hafta 3
-        [OFF, A_MGR, K_MGR], [A_MGR, K_MGR, OFF], [K_MGR, OFF, A_MGR],
-        [A_MGR, K_MGR, MID_MGR], [K_MGR, MID_MGR, A_MGR], [MID_MGR, A_MGR, K_MGR], [A_MGR, K_MGR, MID_MGR],
-        # Hafta 4
-        [A_MGR, OFF, K_MGR], [K_MGR, A_MGR, OFF], [OFF, K_MGR, A_MGR],
-        [MID_MGR, A_MGR, K_MGR], [A_MGR, K_MGR, MID_MGR], [K_MGR, MID_MGR, A_MGR], [MID_MGR, A_MGR, K_MGR]
-    ]
-    for day_idx, m_shifts in enumerate(mgr_patterns):
-        schedule["Onur Kaynak"].append(m_shifts[0])
-        schedule["Banu Sezer"].append(m_shifts[1])
-        schedule["Göktuğ Gökdemir"].append(m_shifts[2])
+    days_info = []
+    for day in range(1, num_days + 1):
+        weekday_idx = datetime(year, month, day).weekday()
+        days_info.append({
+            "day": day,
+            "weekday_idx": weekday_idx,
+            "weekday_name": DAY_NAMES_TR[weekday_idx],
+            "col_name": f"{DAY_NAMES_TR[weekday_idx]} ({day})"
+        })
+    
+    # 1. Müdür Dağılımı (Sıfır Çakışma - 1 Açılış, 1 Kapanış, 3.sü 09:00-17:30)
+    mgr_names = ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]
+    mgr_schedule = {m: [] for m in mgr_names}
+    
+    for i, d in enumerate(days_info):
+        w_idx = d["weekday_idx"]
+        if w_idx == 0:
+            s_dict = {mgr_names[0]: A_MGR, mgr_names[1]: K_MGR, mgr_names[2]: OFF}
+        elif w_idx == 1:
+            s_dict = {mgr_names[0]: K_MGR, mgr_names[1]: OFF, mgr_names[2]: A_MGR}
+        elif w_idx == 2:
+            s_dict = {mgr_names[0]: OFF, mgr_names[1]: A_MGR, mgr_names[2]: K_MGR}
+        elif w_idx == 3:
+            s_dict = {mgr_names[0]: A_MGR, mgr_names[1]: K_MGR, mgr_names[2]: MID_MGR}
+        elif w_idx == 4:
+            s_dict = {mgr_names[0]: MID_MGR, mgr_names[1]: A_MGR, mgr_names[2]: K_MGR}
+        elif w_idx == 5:
+            s_dict = {mgr_names[0]: K_MGR, mgr_names[1]: MID_MGR, mgr_names[2]: A_MGR}
+        else:
+            s_dict = {mgr_names[0]: A_MGR, mgr_names[1]: K_MGR, mgr_names[2]: MID_MGR}
+            
+        for m in mgr_names:
+            mgr_schedule[m].append(s_dict[m])
 
-    # 2. PT Baristalar (Her biri 16 Gün * 7s = 112s Net Saat, Haftalık 3 OFF)
-    pt_emir = [
-        # Hafta 1 (4 gün iş, 3 gün OFF)
-        A_PT, OFF, K_PT, OFF, A_PT, K_PT, OFF,
-        # Hafta 2 (4 gün iş, 3 gün OFF)
-        OFF, A_PT, OFF, K_PT, A_PT, OFF, K_PT,
-        # Hafta 3 (4 gün iş, 3 gün OFF)
-        K_PT, OFF, A_PT, OFF, K_PT, A_PT, OFF,
-        # Hafta 4 (4 gün iş, 3 gün OFF)
-        OFF, K_PT, OFF, A_PT, OFF, K_PT, A_PT
-    ]
-    pt_hayru = [
-        # Hafta 1
-        OFF, A_PT, OFF, K_PT, OFF, A_PT, K_PT,
-        # Hafta 2
-        K_PT, OFF, A_PT, OFF, K_PT, A_PT, OFF,
-        # Hafta 3
-        OFF, K_PT, OFF, A_PT, A_PT, OFF, K_PT,
-        # Hafta 4
-        A_PT, OFF, K_PT, OFF, A_PT, A_PT, OFF
-    ]
-    schedule["Emir Altunbulak"] = pt_emir
-    schedule["Hayrunnisa Erdoğan"] = pt_hayru
+    # 2. PT Baristalar (Emir & Hayrunnisa - Tam 112 Saat)
+    pt_emir = []
+    pt_hayru = []
+    
+    pt_days_emir = {1, 3, 5, 6, 8, 10, 11, 13, 15, 17, 19, 20, 22, 24, 26, 27}
+    pt_days_hayru = {2, 4, 6, 7, 9, 11, 13, 14, 16, 18, 20, 21, 23, 25, 27, 28}
+    
+    for i, d in enumerate(days_info):
+        day_num = d["day"]
+        w_idx = d["weekday_idx"]
+        
+        if day_num in pt_days_emir:
+            pt_emir.append(A_PT if w_idx in [0, 2, 4, 6] else K_PT)
+        else:
+            pt_emir.append(OFF)
+            
+        if day_num in pt_days_hayru:
+            pt_hayru.append(A_PT if w_idx in [1, 3, 5] else K_PT)
+        else:
+            pt_hayru.append(OFF)
 
-    # 3. FT Baristalar (Ceyda & Yusuf Hafta İçi Açılışta Çakışmaz Kuralı + Kadro Sayıları)
-    ft_patterns = {
-        "Ceyda Işık": [
-            A_FT, OFF, A_FT, A_FT, K_FT, K_FT, K_FT,
-            OFF, A_FT, A_FT, K_FT, K_FT, K_FT, K_FT,
-            A_FT, A_FT, OFF, A_FT, K_FT, K_FT, K_FT,
-            OFF, A_FT, A_FT, A_FT, K_FT, K_FT, K_FT
-        ],
-        "Yusuf Efe Aydoğmuş": [
-            K_FT, K_FT, OFF, K_FT, A_FT, A_FT, K_FT,
-            A_FT, OFF, K_FT, A_FT, A_FT, K_FT, K_FT,
-            K_FT, K_FT, K_FT, OFF, A_FT, A_FT, K_FT,
-            K_FT, K_FT, OFF, K_FT, A_FT, A_FT, K_FT
-        ],
-        "Cansu Elibüyük": [
-            A_FT, A_FT, A_FT, OFF, ARA_12, K_FT, K_FT,
-            A_FT, A_FT, A_FT, OFF, ARA_12, K_FT, K_FT,
-            OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT,
-            A_FT, OFF, A_FT, A_FT, ARA_12, K_FT, K_FT
-        ],
-        "Elif Karaca": [
-            K_FT, A_FT, A_FT, ARA_12, OFF, K_FT, K_FT,
-            OFF, K_FT, ARA_12, A_FT, A_FT, K_FT, K_FT,
-            A_FT, A_FT, A_FT, OFF, K_FT, K_FT, ARA_12,
-            OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT
-        ],
-        "Vahti Ünal": [
-            ARA_12, K_FT, K_FT, K_FT, OFF, A_FT, A_FT,
-            K_FT, K_FT, OFF, A_FT, A_FT, ARA_12, K_FT,
-            K_FT, OFF, A_FT, A_FT, ARA_12, K_FT, K_FT,
-            A_FT, ARA_12, K_FT, K_FT, K_FT, OFF, A_FT
-        ],
-        "Cansu Yüksel": [
-            K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, A_FT,
-            ARA_12, K_FT, K_FT, A_FT, OFF, A_FT, A_FT,
-            A_FT, ARA_12, K_FT, K_FT, OFF, A_FT, A_FT,
-            K_FT, K_FT, ARA_12, OFF, A_FT, A_FT, K_FT
-        ],
-        "Ebrar Sena Akkaya": [
-            A_FT, A_FT, K_FT, K_FT, K_FT, ARA_12, OFF,
-            A_FT, A_FT, K_FT, K_FT, K_FT, OFF, ARA_12,
-            OFF, K_FT, K_FT, A_FT, A_FT, ARA_10, K_FT,
-            ARA_12, A_FT, K_FT, K_FT, OFF, A_FT, A_FT
-        ],
-        "Ahmet Emre Demren": [
-            OFF, ARA_12, K_FT, K_FT, A_FT, A_FT, K_FT,
-            K_FT, A_FT, K_FT, OFF, ARA_10, A_FT, K_FT,
-            A_FT, K_FT, K_FT, K_FT, OFF, A_FT, K_FT,
-            K_FT, K_FT, OFF, A_FT, A_FT, ARA_10, K_FT
-        ],
-        "Buse Kayabalı": [
-            K_FT, K_FT, K_FT, A_FT, A_FT, ARA_10, OFF,
-            K_FT, K_FT, A_FT, A_FT, OFF, ARA_10, K_FT,
-            K_FT, A_FT, A_FT, K_FT, K_FT, OFF, A_FT,
-            A_FT, A_FT, K_FT, OFF, K_FT, K_FT, K_FT
-        ],
-        "Ayça Yiğit": [
-            K_FT, K_FT, K_FT, OFF, A_FT, A_FT, K_FT,
-            A_FT, ARA_12, K_FT, K_FT, A_FT, OFF, K_FT,
-            ARA_12, K_FT, OFF, K_FT, A_FT, A_FT, K_FT,
-            K_FT, K_FT, A_FT, A_FT, OFF, K_FT, ARA_12
-        ]
+    # 3. FT Baristalar (Her gün 3 Barista Açılış, 4/5 Barista Kapanış, Çift Aracı Dağılımı)
+    ft_schedule = {
+        "Ceyda Işık": [], "Yusuf Efe Aydoğmuş": [], "Cansu Elibüyük": [],
+        "Elif Karaca": [], "Vahti Ünal": [], "Cansu Yüksel": [],
+        "Ebrar Sena Akkaya": [], "Ahmet Emre Demren": [], "Buse Kayabalı": [], "Ayça Yiğit": []
     }
     
-    for name, p_shifts in ft_patterns.items():
-        schedule[name] = p_shifts
-
-    monthly_data = {}
-    for w_idx, week in enumerate(WEEKS):
+    ft_patterns_base = {
+        "Ceyda Işık": [A_FT, OFF, A_FT, A_FT, ARA_10, K_FT, K_FT], # Ceyda Pzt, Çar, Per Açılış
+        "Yusuf Efe Aydoğmuş": [K_FT, K_FT, OFF, K_FT, A_FT, A_FT, K_FT], # Yusuf Pzt, Çar, Per Açılış Değil (Denetim Kuralı)
+        "Cansu Elibüyük": [A_FT, A_FT, A_FT, OFF, ARA_12, K_FT, K_FT],
+        "Elif Karaca": [K_FT, A_FT, A_FT, ARA_12, OFF, K_FT, ARA_12],
+        "Vahti Ünal": [ARA_12, K_FT, K_FT, K_FT, OFF, A_FT, A_FT],
+        "Cansu Yüksel": [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, A_FT],
+        "Ebrar Sena Akkaya": [A_FT, A_FT, K_FT, K_FT, K_FT, ARA_12, OFF],
+        "Ahmet Emre Demren": [OFF, ARA_12, K_FT, K_FT, A_FT, A_FT, K_FT],
+        "Buse Kayabalı": [K_FT, K_FT, K_FT, A_FT, A_FT, ARA_10, OFF],
+        "Ayça Yiğit": [K_FT, K_FT, K_FT, OFF, A_FT, A_FT, ARA_12]
+    }
+    
+    for i, d in enumerate(days_info):
+        w_idx = d["weekday_idx"]
+        for name in ft_schedule.keys():
+            ft_schedule[name].append(ft_patterns_base[name][w_idx])
+            
+    full_dict = {}
+    full_dict.update(mgr_schedule)
+    full_dict["Emir Altunbulak"] = pt_emir
+    full_dict["Hayrunnisa Erdoğan"] = pt_hayru
+    full_dict.update(ft_schedule)
+    
+    weeks_dict = {}
+    total_weeks = (num_days + 6) // 7
+    for w in range(total_weeks):
+        start_d = w * 7
+        end_d = min((w + 1) * 7, num_days)
+        w_name = f"{w+1}. Hafta ({start_d+1}-{end_d})"
+        
         df_w = pd.DataFrame({
             "Partner": [e["name"] for e in EMPLOYEES],
             "TİP": [e["tip"] for e in EMPLOYEES]
         })
-        for d_idx, d in enumerate(WEEK_DAYS):
-            col_name = f"{d} ({w_idx*7 + d_idx + 1})"
-            shifts_col = []
-            for emp in EMPLOYEES:
-                shifts_col.append(schedule[emp["name"]][w_idx*7 + d_idx])
-            df_w[col_name] = shifts_col
-        monthly_data[week] = df_w
-    return monthly_data
+        for d_idx in range(start_d, end_d):
+            col_name = days_info[d_idx]["col_name"]
+            df_w[col_name] = [full_dict[emp["name"]][d_idx] for emp in EMPLOYEES]
+        weeks_dict[w_name] = df_w
+        
+    return weeks_dict
 
-def save_current_data(data):
-    try:
-        dict_to_save = {w: df.to_dict(orient="records") for w, df in data.items()}
-        with open(SAVE_FILE, "w", encoding="utf-8") as f:
-            json.dump(dict_to_save, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        st.error(f"Kayıt hatası: {e}")
-
-def load_data():
+def load_all_store():
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, "r", encoding="utf-8") as f:
-                data_dict = json.load(f)
-                return {w: pd.DataFrame(df_raw) for w, df_raw in data_dict.items()}
+                return json.load(f)
         except Exception:
             pass
-    return generate_armada_rule_based_schedule()
+    return {}
 
-if "monthly_shifts" not in st.session_state:
-    st.session_state.monthly_shifts = load_data()
+def save_month_store(month_key, weeks_dict):
+    store = load_all_store()
+    store[month_key] = {w: df.to_dict(orient="records") for w, df in weeks_dict.items()}
+    try:
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            json.dump(store, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"Kayıt hatası: {e}")
 
-# 1. HIZLI MANUEL DÜZENLEME PANELİ
-st.subheader("🛠️ Manuel Vardiya & İzin Düzenleme")
+# Üst Ay & Yıl Seçimi
+c_y, c_m, c_gen = st.columns([1, 1.5, 2.5])
+with c_y:
+    sel_year = st.selectbox("Yıl", [2026, 2027], index=0)
+with c_m:
+    sel_month = st.selectbox("Ay", range(1, 13), index=datetime.now().month - 1, format_func=lambda x: MONTH_NAMES_TR[x-1])
+
+month_key = f"{sel_year}_{sel_month:02d}"
+
+if "app_store" not in st.session_state:
+    st.session_state.app_store = load_all_store()
+
+if month_key not in st.session_state.app_store:
+    st.session_state.app_store[month_key] = {
+        w: df.to_dict(orient="records") 
+        for w, df in generate_month_schedule_algorithm(sel_year, sel_month).items()
+    }
+    save_month_store(month_key, {w: pd.DataFrame(d) for w, d in st.session_state.app_store[month_key].items()})
+
+with c_gen:
+    st.write("")
+    if st.button("🤖 Seçilen Ayın Vardiyasını Sıfırdan Üret", use_container_width=True, type="primary"):
+        new_w = generate_month_schedule_algorithm(sel_year, sel_month)
+        save_month_store(month_key, new_w)
+        st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} vardiyası kurallara göre başarıyla yeniden oluşturuldu!")
+        st.rerun()
+
+current_month_weeks = {w: pd.DataFrame(data) for w, data in st.session_state.app_store[month_key].items()}
+WEEKS_KEYS = list(current_month_weeks.keys())
+
+# 1. HIZLI DÜZENLEME PANELİ
+st.subheader(f"🛠️ {MONTH_NAMES_TR[sel_month-1]} {sel_year} - Manuel Vardiya Düzenleme")
 
 c1, c2, c3 = st.columns([1.5, 1.5, 1.5])
 with c1:
-    sel_week = st.selectbox("Hafta Seç", WEEKS, key="dyn_week")
+    sel_week = st.selectbox("Hafta Seç", WEEKS_KEYS, key="dyn_week")
 with c2:
     sel_emp = st.selectbox("Partner Seç", [e["name"] for e in EMPLOYEES], key="dyn_emp")
 
-current_df = st.session_state.monthly_shifts[sel_week]
+current_df = current_month_weeks[sel_week]
 day_cols = [c for c in current_df.columns if c not in ["Partner", "TİP", "Haftalık Saat"]]
 
 with c3:
@@ -342,61 +347,49 @@ st.markdown(f"**Şu Anki Durum:** `{curr_val}` ({p_tip})")
 b1, b2, b3, b4, b5, b6 = st.columns(6)
 with b1:
     if st.button("🔴 OFF Yap", use_container_width=True):
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = "OFF"
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = "OFF"
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
 with b2:
     if st.button("☀️ Açılış", use_container_width=True):
         val = A_PT if p_tip == "PT" else A_FT
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = val
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = val
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
 with b3:
     if st.button("☕ Ara (12:00)", use_container_width=True):
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = ARA_12
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = ARA_12
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
 with b4:
     if st.button("☕ Ara (10:00)", use_container_width=True):
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = ARA_10
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = ARA_10
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
 with b5:
     if st.button("🌙 Kapanış", use_container_width=True):
         val = K_PT if p_tip == "PT" else K_FT
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = val
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = val
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
 with b6:
     if st.button("👔 Müd. Ara (09:00)", use_container_width=True):
-        st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = MID_MGR
-        save_current_data(st.session_state.monthly_shifts)
+        current_month_weeks[sel_week].at[emp_idx, sel_day] = MID_MGR
+        save_month_store(month_key, current_month_weeks)
         st.rerun()
 
-with st.form("custom_edit_form", clear_on_submit=False):
-    c_in, c_btn = st.columns([3, 1])
-    with c_in:
-        custom_val = st.text_input("Veya Özel Saat / İzin Yaz (Örn: YILLIK İZİN, 08:30-17:00):", value=curr_val)
-    with c_btn:
-        st.write("")
-        custom_save = st.form_submit_button("💾 Özel Saati Kaydet", type="primary", use_container_width=True)
-        if custom_save:
-            st.session_state.monthly_shifts[sel_week].at[emp_idx, sel_day] = custom_val.strip()
-            save_current_data(st.session_state.monthly_shifts)
-            st.rerun()
-
 # 2. HAFTALIK ÇİZELGELER
-st.subheader("📅 Haftalık Vardiya Çizelgeleri")
-tabs = st.tabs(WEEKS)
+st.subheader(f"📅 {MONTH_NAMES_TR[sel_month-1]} {sel_year} - Haftalık Vardiya Çizelgeleri")
+tabs = st.tabs(WEEKS_KEYS)
 
-for idx, week in enumerate(WEEKS):
+for idx, week in enumerate(WEEKS_KEYS):
     with tabs[idx]:
-        df_w = st.session_state.monthly_shifts[week].copy()
+        df_w = current_month_weeks[week].copy()
         d_cols = [c for c in df_w.columns if c not in ["Partner", "TİP", "Haftalık Saat"]]
         
         weekly_hours = []
@@ -423,15 +416,15 @@ for idx, week in enumerate(WEEKS):
 
 # 3. AYLIK RAPORLAMA
 all_days_series = {emp["name"]: [] for emp in EMPLOYEES}
-for week in WEEKS:
-    df_w = st.session_state.monthly_shifts[week]
+for week in WEEKS_KEYS:
+    df_w = current_month_weeks[week]
     d_cols = [c for c in df_w.columns if c not in ["Partner", "TİP", "Haftalık Saat"]]
     for _, row in df_w.iterrows():
         p_name = row["Partner"]
         for d in d_cols:
             all_days_series[p_name].append((d, str(row[d])))
 
-st.subheader("📊 Aylık Partner Çalışma ve Vardiya Raporu")
+st.subheader(f"📊 {MONTH_NAMES_TR[sel_month-1]} {sel_year} - Aylık Partner Çalışma ve Vardiya Raporu")
 
 report_rows = []
 for emp in EMPLOYEES:
@@ -476,7 +469,6 @@ for emp in EMPLOYEES:
         "Ara": cnt_ara,
         "Kapanış": cnt_kapanis,
         "OFF": cnt_off,
-        "İzin/Rapor": cnt_izin + cnt_rapor,
         "Toplam Net Saat": format_hour(total_hours),
         "Aylık Hedef": format_hour(limit),
         "Durum": status
@@ -494,9 +486,9 @@ def style_report_table(row):
         styles[1] = "background-color: #fef08a; color: #854d0e; font-weight: bold;"
     
     if "Kota Aşımı" in str(row["Durum"]):
-        styles[9] = "background-color: #fee2e2; color: #991b1b; font-weight: bold;"
+        styles[8] = "background-color: #fee2e2; color: #991b1b; font-weight: bold;"
     elif "Tam Kota" in str(row["Durum"]):
-        styles[9] = "background-color: #dcfce7; color: #166534; font-weight: bold;"
+        styles[8] = "background-color: #dcfce7; color: #166534; font-weight: bold;"
     return styles
 
 st.dataframe(
@@ -514,7 +506,7 @@ def get_report_html():
     <html>
     <head>
     <meta charset="utf-8">
-    <title>Armada Starbucks Vardiya Raporu</title>
+    <title>Armada Starbucks Vardiya Raporu - {MONTH_NAMES_TR[sel_month-1]} {sel_year}</title>
     <style>
         @page {{ size: A4 landscape; margin: 8mm; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #0f172a; font-size: 8pt; padding: 10px; }}
@@ -537,8 +529,8 @@ def get_report_html():
         <div class="no-print" style="margin-bottom: 12px; text-align: right;">
             <button onclick="window.print()" style="padding: 8px 16px; background-color: #006241; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🖨️ PDF Olarak Kaydet / Yazdır</button>
         </div>
-        <h1>☕ Armada Starbucks - Aylık Vardiya & Performans Raporu</h1>
-        <p class="sub">4 Haftalık Çalışma Çizelgesi ve İstatistik Özeti (1 Saat Mola Düşümlü Net Saatler)</p>
+        <h1>☕ Armada Starbucks - {MONTH_NAMES_TR[sel_month-1]} {sel_year} Aylık Vardiya & Performans Raporu</h1>
+        <p class="sub">Çalışma Çizelgesi ve İstatistik Özeti (1 Saat Mola Düşümlü Net Saatler)</p>
         
         <h2>📊 Aylık Partner Çalışma ve İstatistik Tablosu</h2>
         <table>
@@ -559,8 +551,8 @@ def get_report_html():
         """
     html_content += "</tbody></table>"
     
-    for week in WEEKS:
-        df_w = st.session_state.monthly_shifts[week]
+    for week in WEEKS_KEYS:
+        df_w = current_month_weeks[week]
         cols = [c for c in df_w.columns if c != "Haftalık Saat"]
         html_content += f"<h2>📅 {week}</h2><table><thead><tr>"
         for c in cols:
@@ -583,6 +575,6 @@ def get_report_html():
 report_html = get_report_html()
 b64 = base64.b64encode(report_html.encode("utf-8")).decode("utf-8")
 st.markdown(
-    f'<a href="data:text/html;base64,{b64}" target="_blank" download="Armada_Starbucks_Aylik_Rapor.html" style="display:inline-block;padding:10px 22px;background-color:#006241;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">📥 Resmi Raporu Aç ve PDF Olarak Yazdır / Kaydet</a>',
+    f'<a href="data:text/html;base64,{b64}" target="_blank" download="Armada_Starbucks_{MONTH_NAMES_TR[sel_month-1]}_{sel_year}_Rapor.html" style="display:inline-block;padding:10px 22px;background-color:#006241;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">📥 Resmi Raporu Aç ve PDF Olarak Yazdır / Kaydet</a>',
     unsafe_allow_html=True
 )
