@@ -1,14 +1,10 @@
 import streamlit as st
 import pandas as pd
-import json
-import os
 import re
 import base64
 import random
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
-
-SAVE_FILE = os.path.expanduser("~/Desktop/starbucks_armada_data.json")
 
 STARBUCKS_LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
   <circle cx="250" cy="250" r="248" fill="#006241"/>
@@ -138,48 +134,47 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # 4 Haftalık Dengeli ve Çeşitlendirilmiş Rotasyon Matrisi (Haftada max 3 Açılış / 3 Kapanış, 1 Ara, 1 OFF)
     ft_rotations = {
         "Ceyda Işık": [
-            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
+            [OFF, A_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
             [A_FT, A_FT, ARA_10, OFF, K_FT, K_FT, K_FT],
-            [A_FT, A_FT, A_FT, K_FT, OFF, K_FT, ARA_12],
+            [A_FT, A_FT, K_FT, K_FT, OFF, K_FT, ARA_12],
             [K_FT, ARA_10, OFF, A_FT, A_FT, K_FT, K_FT]
         ],
         "Yusuf Efe Aydoğmuş": [
-            [K_FT, ARA_10, K_FT, A_FT, OFF, A_FT, A_FT],
+            [K_FT, ARA_10, K_FT, A_FT, A_FT, A_FT, OFF],
             [OFF, K_FT, K_FT, ARA_12, A_FT, A_FT, A_FT],
-            [K_FT, K_FT, ARA_10, A_FT, OFF, A_FT, A_FT],
+            [K_FT, K_FT, ARA_10, A_FT, A_FT, A_FT, OFF],
             [A_FT, A_FT, K_FT, K_FT, ARA_12, A_FT, OFF]
         ],
         "Elif Karaca": [
-            [A_FT, A_FT, K_FT, K_FT, ARA_12, K_FT, OFF],
+            [ARA_10, K_FT, A_FT, K_FT, ARA_12, OFF, K_FT],
             [A_FT, A_FT, A_FT, K_FT, K_FT, ARA_10, OFF],
             [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
             [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF]
         ],
         "Cansu Yüksel": [
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, OFF, K_FT],
+            [K_FT, A_FT, OFF, ARA_12, K_FT, K_FT, A_FT],
             [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT],
-            [A_FT, A_FT, K_FT, K_FT, ARA_10, OFF, K_FT],
+            [A_FT, A_FT, OFF, K_FT, ARA_10, K_FT, K_FT],
             [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT]
         ],
         "Ebrar Sena Akkaya": [
-            [A_FT, OFF, A_FT, ARA_10, K_FT, K_FT, K_FT],
+            [K_FT, K_FT, OFF, A_FT, A_FT, ARA_12, K_FT],
             [A_FT, A_FT, K_FT, K_FT, ARA_12, OFF, K_FT],
-            [A_FT, OFF, A_FT, K_FT, K_FT, ARA_10, K_FT],
+            [A_FT, K_FT, OFF, K_FT, K_FT, ARA_10, K_FT],
             [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT]
         ],
         "Ahmet Emre Demren": [
-            [A_FT, A_FT, K_FT, ARA_12, K_FT, OFF, K_FT],
+            [ARA_12, A_FT, K_FT, K_FT, A_FT, A_FT, OFF],
             [A_FT, OFF, A_FT, A_FT, K_FT, K_FT, ARA_10],
             [A_FT, A_FT, K_FT, ARA_12, K_FT, OFF, K_FT],
             [A_FT, A_FT, A_FT, K_FT, OFF, K_FT, ARA_10]
         ],
         "Ayça Yiğit": [
-            [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF],
+            [A_FT, OFF, K_FT, ARA_10, K_FT, A_FT, K_FT],
             [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
-            [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF],
+            [A_FT, OFF, K_FT, K_FT, ARA_10, K_FT, A_FT],
             [A_FT, A_FT, ARA_12, K_FT, OFF, K_FT, K_FT]
         ]
     }
@@ -187,7 +182,6 @@ def generate_armada_master_schedule(seed=None):
     for w_idx in range(4):
         s_d = w_idx * 7
         
-        # 1. MÜDÜRLER (Haftada 1 OFF = 45s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
         mgr_pattern = [
             {"Onur Kaynak": OFF,   "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR},
             {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR},
@@ -202,32 +196,27 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
-        # 2. PT BARİSTALAR: KESİN 4 GÜN İŞ = 28s, 3 GÜN OFF -> 4 HAFTADA 112s
         emir_work_days = [0, 2, 4, 6]
         hayru_work_days = [1, 2, 3, 5]
         for day in range(7):
             abs_d = s_d + day
-            schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4, 6] else K_PT) if day in emir_work_days else OFF
-            schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 2] else K_PT) if day in hayru_work_days else OFF
+            schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4] else K_PT) if day in emir_work_days else OFF
+            schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 3] else K_PT) if day in hayru_work_days else OFF
 
-        # 3. SABİT KURALI OLAN FT BARİSTALAR
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            # Cansu Elibüyük: Salı (day 1) OFF, Hafta içi Açılış, Hafta sonu Kapanış (Asla Aracı Yok)
             if day == 1:
                 schedule["Cansu Elibüyük"][abs_d] = OFF
             else:
                 schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
                 
-            # Vahti Ünal: Cuma (day 4) OFF, Hafta içi Kapanış, Hafta sonu Açılış
             if day == 4:
                 schedule["Vahti Ünal"][abs_d] = OFF
             else:
                 schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
-            # Buse Kayabalı: Perşembe (day 3) OFF, Elibüyük Salı OFF iken MUTLAKA Açılış
             if day == 3:
                 schedule["Buse Kayabalı"][abs_d] = OFF
             elif day == 1:
@@ -235,7 +224,6 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = A_FT if day in [0, 2] else K_FT
 
-            # 4. DÖNÜŞÜMLÜ 7 FT BARİSTANIN ATAMASI (Dengeli ve Çeşitli Dağılım)
             for b in ft_rotations.keys():
                 schedule[b][abs_d] = ft_rotations[b][w_idx][day]
 
@@ -273,7 +261,7 @@ with c_gen:
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
         st.session_state.current_schedule = generate_armada_master_schedule(seed=new_seed)
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için dengeli ve tam kotalı vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı hatasız vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = st.session_state.current_schedule
