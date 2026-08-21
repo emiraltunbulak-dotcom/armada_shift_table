@@ -134,13 +134,13 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # Her hafta tam 6 gün iş (45s) ve tam 1 OFF garanti eden, pazar/cts kapanışı net 5 barista + 1 müdür = 6 kişi yapan rotasyon:
-    ft_rotations_flawless = {
+    # FT Baristaların her hafta 3 farklı vardiyayı da (Açılış, Kapanış, Ara) göreceği ve kapanıştan açılışa geçişin olmadığı kesin rotasyon:
+    ft_rotations_3shifts = {
         "Ceyda Işık": [
             [OFF, K_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
             [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12],
             [OFF, K_FT, K_FT, K_FT, K_FT, K_FT, ARA_10],
-            [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12]
+            [OFF, K_FT, A_FT, K_FT, K_FT, K_FT, ARA_12]
         ],
         "Yusuf Efe Aydoğmuş": [
             [K_FT, ARA_10, K_FT, A_FT, A_FT, A_FT, OFF],
@@ -183,6 +183,7 @@ def generate_armada_master_schedule(seed=None):
     for w_idx in range(4):
         s_d = w_idx * 7
         
+        # 1. MÜDÜRLER (Haftalık 1 OFF = 45s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
         mgr_pattern = [
             {"Onur Kaynak": OFF,   "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR},
             {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR},
@@ -197,7 +198,7 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
-        # PT Baristalar (Her hafta kesin 4 gün iş = 28s, 4 haftada 112s)
+        # 2. PT BARİSTALAR (Haftalık kesin 4 gün iş = 28s, 4 haftada 112s)
         emir_work_days = [0, 2, 4, 6]
         hayru_work_days = [1, 3, 5, 6]
         for day in range(7):
@@ -205,29 +206,38 @@ def generate_armada_master_schedule(seed=None):
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4] else K_PT) if day in emir_work_days else OFF
             schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 3] else (K_PT if day == 5 else A_PT)) if day in hayru_work_days else OFF
 
+        # 3. SABİT KURALI OLAN FT BARİSTALAR
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
+            # Cansu Elibüyük: Salı (day 1) OFF, Hafta içi Açılış, Hafta sonu Kapanış (Asla Aracı Yok)
             if day == 1:
                 schedule["Cansu Elibüyük"][abs_d] = OFF
             else:
                 schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
                 
+            # Vahti Ünal: Cuma (day 4) OFF, Hafta içi Kapanış, Hafta sonu Açılış, Çarşamba Aracı
             if day == 4:
                 schedule["Vahti Ünal"][abs_d] = OFF
+            elif day == 2:
+                schedule["Vahti Ünal"][abs_d] = ARA_10  # Vahti 3 vardiyayı da görür
             else:
                 schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
+            # Buse Kayabalı: Perşembe (day 3) OFF, Elibüyük Salı OFF iken MUTLAKA Açılış, Cuma Aracı
             if day == 3:
                 schedule["Buse Kayabalı"][abs_d] = OFF
             elif day == 1:
                 schedule["Buse Kayabalı"][abs_d] = A_FT
+            elif day == 4:
+                schedule["Buse Kayabalı"][abs_d] = ARA_12  # Buse 3 vardiyayı da görür
             else:
                 schedule["Buse Kayabalı"][abs_d] = A_FT if day in [0, 2] else K_FT
 
-            for b in ft_rotations_flawless.keys():
-                schedule[b][abs_d] = ft_rotations_flawless[b][w_idx][day]
+            # 4. DÖNÜŞÜMLÜ FT BARİSTALAR (Haftada Açılış, Kapanış ve Ara dengesi)
+            for b in ft_rotations_3shifts.keys():
+                schedule[b][abs_d] = ft_rotations_3shifts[b][w_idx][day]
 
     weeks_dict = {}
     for w in range(4):
