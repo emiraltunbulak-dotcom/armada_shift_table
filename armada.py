@@ -95,8 +95,6 @@ A_PT = "07:30-15:30"
 K_PT = "16:00-00:00"
 OFF = "OFF"
 
-CLOSE_SET = {K_MGR, K_FT, K_PT}
-
 def calculate_net_hours(shift_str):
     s = str(shift_str).strip().upper()
     if not s or s in ["OFF", "BOŞ", "-", "0", "NONE"]:
@@ -140,10 +138,56 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
+    # 4 Haftalık Dengeli ve Çeşitlendirilmiş Rotasyon Matrisi (Haftada max 3 Açılış / 3 Kapanış, 1 Ara, 1 OFF)
+    ft_rotations = {
+        "Ceyda Işık": [
+            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
+            [A_FT, A_FT, ARA_10, OFF, K_FT, K_FT, K_FT],
+            [A_FT, A_FT, A_FT, K_FT, OFF, K_FT, ARA_12],
+            [K_FT, ARA_10, OFF, A_FT, A_FT, K_FT, K_FT]
+        ],
+        "Yusuf Efe Aydoğmuş": [
+            [K_FT, ARA_10, K_FT, A_FT, OFF, A_FT, A_FT],
+            [OFF, K_FT, K_FT, ARA_12, A_FT, A_FT, A_FT],
+            [K_FT, K_FT, ARA_10, A_FT, OFF, A_FT, A_FT],
+            [A_FT, A_FT, K_FT, K_FT, ARA_12, A_FT, OFF]
+        ],
+        "Elif Karaca": [
+            [A_FT, A_FT, K_FT, K_FT, ARA_12, K_FT, OFF],
+            [A_FT, A_FT, A_FT, K_FT, K_FT, ARA_10, OFF],
+            [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
+            [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF]
+        ],
+        "Cansu Yüksel": [
+            [A_FT, A_FT, ARA_10, K_FT, K_FT, OFF, K_FT],
+            [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT],
+            [A_FT, A_FT, K_FT, K_FT, ARA_10, OFF, K_FT],
+            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT]
+        ],
+        "Ebrar Sena Akkaya": [
+            [A_FT, OFF, A_FT, ARA_10, K_FT, K_FT, K_FT],
+            [A_FT, A_FT, K_FT, K_FT, ARA_12, OFF, K_FT],
+            [A_FT, OFF, A_FT, K_FT, K_FT, ARA_10, K_FT],
+            [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT]
+        ],
+        "Ahmet Emre Demren": [
+            [A_FT, A_FT, K_FT, ARA_12, K_FT, OFF, K_FT],
+            [A_FT, OFF, A_FT, A_FT, K_FT, K_FT, ARA_10],
+            [A_FT, A_FT, K_FT, ARA_12, K_FT, OFF, K_FT],
+            [A_FT, A_FT, A_FT, K_FT, OFF, K_FT, ARA_10]
+        ],
+        "Ayça Yiğit": [
+            [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF],
+            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
+            [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF],
+            [A_FT, A_FT, ARA_12, K_FT, OFF, K_FT, K_FT]
+        ]
+    }
+
     for w_idx in range(4):
         s_d = w_idx * 7
         
-        # 1. MÜDÜRLER (Haftalık 1 OFF = 45s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
+        # 1. MÜDÜRLER (Haftada 1 OFF = 45s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
         mgr_pattern = [
             {"Onur Kaynak": OFF,   "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR},
             {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR},
@@ -166,82 +210,34 @@ def generate_armada_master_schedule(seed=None):
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4, 6] else K_PT) if day in emir_work_days else OFF
             schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 2] else K_PT) if day in hayru_work_days else OFF
 
-        # 3. FT BARİSTALAR DOKUNULMAZ 1 OFF HARİTASI (Günde max 2 OFF kuralı)
-        ft_off_map = {
-            "Cansu Elibüyük": 1,    # Salı
-            "Buse Kayabalı": 3,      # Perşembe (Elibüyük Salı OFF iken Buse Açılış)
-            "Vahti Ünal": 4,         # Cuma
-            "Ceyda Işık": 0,         # Pazartesi
-            "Yusuf Efe Aydoğmuş": 4, # Cuma
-            "Elif Karaca": 6,        # Pazar
-            "Cansu Yüksel": 5,       # Cumartesi
-            "Ebrar Sena Akkaya": 1,  # Salı
-            "Ahmet Emre Demren": 5,  # Cumartesi
-            "Ayça Yiğit": 6          # Pazar
-        }
-
-        for name, off_d in ft_off_map.items():
-            schedule[name][s_d + off_d] = OFF
-
-        # 4. FT ÇALIŞMA GÜNLERİNDE DENGELİ VARDİYA ATAMA (AÇILIŞ MAX 3 BARİSTA, HAFTA SONU KAPANIŞ NET 5 BARİSTA + 1 ARACI)
+        # 3. SABİT KURALI OLAN FT BARİSTALAR
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            # Cansu Elibüyük (Hafta içi Açılış, Hafta sonu Kapanış, Asla Aracı Yok)
-            if day != ft_off_map["Cansu Elibüyük"]:
+            # Cansu Elibüyük: Salı (day 1) OFF, Hafta içi Açılış, Hafta sonu Kapanış (Asla Aracı Yok)
+            if day == 1:
+                schedule["Cansu Elibüyük"][abs_d] = OFF
+            else:
                 schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
                 
-            # Vahti Ünal (Hafta içi Kapanış, Hafta sonu Açılış)
-            if day != ft_off_map["Vahti Ünal"]:
+            # Vahti Ünal: Cuma (day 4) OFF, Hafta içi Kapanış, Hafta sonu Açılış
+            if day == 4:
+                schedule["Vahti Ünal"][abs_d] = OFF
+            else:
                 schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
-            # Buse Kayabalı (Elibüyük Salı OFF iken MUTLAKA Açılış)
-            if day != ft_off_map["Buse Kayabalı"]:
-                if day == ft_off_map["Cansu Elibüyük"]:
-                    schedule["Buse Kayabalı"][abs_d] = A_FT
-                else:
-                    schedule["Buse Kayabalı"][abs_d] = A_FT if (day in [0, 2]) else K_FT
+            # Buse Kayabalı: Perşembe (day 3) OFF, Elibüyük Salı OFF iken MUTLAKA Açılış
+            if day == 3:
+                schedule["Buse Kayabalı"][abs_d] = OFF
+            elif day == 1:
+                schedule["Buse Kayabalı"][abs_d] = A_FT
+            else:
+                schedule["Buse Kayabalı"][abs_d] = A_FT if day in [0, 2] else K_FT
 
-            # Diğer FT Baristalar
-            other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
-            
-            current_barista_open = sum(1 for name in ["Cansu Elibüyük", "Vahti Ünal", "Buse Kayabalı", "Emir Altunbulak", "Hayrunnisa Erdoğan"] if schedule[name][abs_d] in [A_FT, A_PT])
-            current_barista_close = sum(1 for name in ["Cansu Elibüyük", "Vahti Ünal", "Buse Kayabalı", "Emir Altunbulak", "Hayrunnisa Erdoğan"] if schedule[name][abs_d] in [K_FT, K_PT])
-            
-            needed_barista_open = max(0, 3 - current_barista_open)   # En fazla 3 Barista Açılış (+ 1 Müdür = 4 Kişi)
-            needed_barista_close = max(0, (5 if is_weekend else 4) - current_barista_close) # Hafta sonu Net 5 Barista Kapanış (+ 1 Müdür = 6 Kişi)
-            
-            working_others = [b for b in other_ft if day != ft_off_map[b]]
-            
-            assigned_openers = 0
-            assigned_closers = 0
-            assigned_ara_12 = 0
-            assigned_ara_10 = 0
-            
-            for b in working_others:
-                can_open = True
-                if not is_weekend and b == "Yusuf Efe Aydoğmuş" and schedule["Ceyda Işık"][abs_d] == A_FT:
-                    can_open = False
-                if not is_weekend and b == "Ceyda Işık" and schedule["Yusuf Efe Aydoğmuş"][abs_d] == A_FT:
-                    can_open = False
-                if abs_d > 0 and schedule[b][abs_d - 1] in CLOSE_SET:
-                    can_open = False
-                    
-                if assigned_openers < needed_barista_open and can_open:
-                    schedule[b][abs_d] = A_FT
-                    assigned_openers += 1
-                elif assigned_closers < needed_barista_close:
-                    schedule[b][abs_d] = K_FT
-                    assigned_closers += 1
-                elif assigned_ara_12 == 0:
-                    schedule[b][abs_d] = ARA_12
-                    assigned_ara_12 += 1
-                elif assigned_ara_10 == 0:
-                    schedule[b][abs_d] = ARA_10
-                    assigned_ara_10 += 1
-                else:
-                    schedule[b][abs_d] = K_FT
+            # 4. DÖNÜŞÜMLÜ 7 FT BARİSTANIN ATAMASI (Dengeli ve Çeşitli Dağılım)
+            for b in ft_rotations.keys():
+                schedule[b][abs_d] = ft_rotations[b][w_idx][day]
 
     weeks_dict = {}
     for w in range(4):
@@ -277,7 +273,7 @@ with c_gen:
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
         st.session_state.current_schedule = generate_armada_master_schedule(seed=new_seed)
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı hatasız vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için dengeli ve tam kotalı vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = st.session_state.current_schedule
