@@ -1,10 +1,14 @@
 import streamlit as st
 import pandas as pd
+import json
+import os
 import re
 import base64
 import random
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
+
+SAVE_FILE = os.path.expanduser("~/Desktop/starbucks_armada_data.json")
 
 STARBUCKS_LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
   <circle cx="250" cy="250" r="248" fill="#006241"/>
@@ -51,7 +55,7 @@ st.markdown(f"""
     <img src="{LOGO_DATA_URI}" class="logo-img" alt="Logo">
     <div>
         <h1 class="header-title">Armada Starbucks Vardiya & Aylık Raporlama Yönetimi</h1>
-        <p class="header-sub">ZERO-ERROR STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
+        <p class="header-sub">OPERATIONAL STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -90,6 +94,8 @@ ARA_10 = "10:00-18:30"
 A_PT = "07:30-15:30"
 K_PT = "16:00-00:00"
 OFF = "OFF"
+
+CLOSE_SET = {K_MGR, K_FT, K_PT}
 
 def calculate_net_hours(shift_str):
     s = str(shift_str).strip().upper()
@@ -177,7 +183,7 @@ def generate_armada_master_schedule(seed=None):
         for name, off_d in ft_off_map.items():
             schedule[name][s_d + off_d] = OFF
 
-        # 4. FT ÇALIŞMA GÜNLERİ İÇİNDE VARDİYA ATAMA (KESİN 6 GÜN İŞ = 45s -> 4 HAFTADA 180s)
+        # 4. FT ÇALIŞMA GÜNLERİNDE AÇILIŞ SINIRLI VE DENGELİ DAĞITIM
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
@@ -186,36 +192,53 @@ def generate_armada_master_schedule(seed=None):
             if day != ft_off_map["Cansu Elibüyük"]:
                 schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
                 
+            # Vahti Ünal (Hafta içi Kapanış, Hafta sonu Açılış)
+            if day != ft_off_map["Vahti Ünal"]:
+                schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
+
             # Buse Kayabalı (Elibüyük Salı OFF iken MUTLAKA Açılış)
             if day != ft_off_map["Buse Kayabalı"]:
                 if day == ft_off_map["Cansu Elibüyük"]:
                     schedule["Buse Kayabalı"][abs_d] = A_FT
                 else:
                     schedule["Buse Kayabalı"][abs_d] = A_FT if (day in [0, 2]) else K_FT
-                    
-            # Vahti Ünal (Hafta içi Kapanış, Hafta sonu Açılış)
-            if day != ft_off_map["Vahti Ünal"]:
-                schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
-            # Diğer FT Baristalar: 3 Açılış / 3 Kapanış / 1 Ara dengesi
+            # Diğer 7 FT Barista İçin Açılışı Maksimum 3 Barista İle Sınırla (Fazlalıklar 10:00 ve 12:00 Aracı)
             other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
-            for b in other_ft:
-                if day == ft_off_map[b]:
-                    continue # OFF olan güne ASLA dokunulamaz
-                if b == "Ceyda Işık":
-                    schedule[b][abs_d] = A_FT if day in [1, 2, 3] else (K_FT if day in [4, 5] else ARA_12)
-                elif b == "Yusuf Efe Aydoğmuş":
-                    schedule[b][abs_d] = K_FT if day in [0, 1, 2] else (A_FT if day in [3, 5, 6] else ARA_10)
-                elif b == "Elif Karaca":
-                    schedule[b][abs_d] = A_FT if day in [0, 1, 5] else (K_FT if day in [2, 4] else ARA_12)
-                elif b == "Cansu Yüksel":
-                    schedule[b][abs_d] = K_FT if day in [0, 2, 6] else (A_FT if day in [1, 4] else ARA_10)
-                elif b == "Ebrar Sena Akkaya":
-                    schedule[b][abs_d] = K_FT if day in [0, 2, 3, 4] else (A_FT if day in [5, 6] else ARA_12)
-                elif b == "Ahmet Emre Demren":
-                    schedule[b][abs_d] = A_FT if day in [0, 2, 3] else (K_FT if day in [1, 6] else ARA_10)
-                elif b == "Ayça Yiğit":
-                    schedule[b][abs_d] = A_FT if day in [0, 1, 5] else (K_FT if day in [2, 3, 4] else ARA_12)
+            
+            # Şu ana kadar o gün açılışa yazılmış barista sayısı
+            current_barista_open = sum(1 for name in ["Cansu Elibüyük", "Vahti Ünal", "Buse Kayabalı", "Emir Altunbulak", "Hayrunnisa Erdoğan"] if schedule[name][abs_d] in [A_FT, A_PT])
+            needed_barista_open = max(0, 3 - current_barista_open) # KESİNLİKLE EN FAZLA 3 BARİSTA AÇILIŞ
+            
+            working_others = [b for b in other_ft if day != ft_off_map[b]]
+            
+            assigned_openers = 0
+            assigned_ara_10 = 0
+            assigned_ara_12 = 0
+            
+            for b in working_others:
+                can_open = True
+                # Denetim: Ceyda & Yusuf Efe hafta içi aynı gün açılış olamaz
+                if not is_weekend and b == "Yusuf Efe Aydoğmuş" and schedule["Ceyda Işık"][abs_d] == A_FT:
+                    can_open = False
+                if not is_weekend and b == "Ceyda Işık" and schedule["Yusuf Efe Aydoğmuş"][abs_d] == A_FT:
+                    can_open = False
+                # Ergonomi: Kapanıştan sonraki gün Açılış olamaz
+                if abs_d > 0 and schedule[b][abs_d - 1] in CLOSE_SET:
+                    can_open = False
+                    
+                # Dağıtım hiyerarşisi: Önce ihtiyaç kadar açılış (max 3 barista), fazlalar 10:00 ve 12:00 araçısı
+                if assigned_openers < needed_barista_open and can_open:
+                    schedule[b][abs_d] = A_FT
+                    assigned_openers += 1
+                elif assigned_ara_10 == 0 and not is_weekend:
+                    schedule[b][abs_d] = ARA_10
+                    assigned_ara_10 += 1
+                elif assigned_ara_12 == 0 and not is_weekend:
+                    schedule[b][abs_d] = ARA_12
+                    assigned_ara_12 += 1
+                else:
+                    schedule[b][abs_d] = K_FT
 
     weeks_dict = {}
     for w in range(4):
