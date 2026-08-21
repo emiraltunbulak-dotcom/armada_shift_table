@@ -166,7 +166,7 @@ def generate_armada_master_schedule(seed=None):
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4, 6] else K_PT) if day in emir_work_days else OFF
             schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 2] else K_PT) if day in hayru_work_days else OFF
 
-        # 3. FT BARİSTALAR İÇİN DOKUNULMAZ 1 OFF HARİTASI (Günde max 2 OFF kuralı)
+        # 3. FT BARİSTALAR DOKUNULMAZ 1 OFF HARİTASI (Günde max 2 OFF kuralı)
         ft_off_map = {
             "Cansu Elibüyük": 1,    # Salı
             "Buse Kayabalı": 3,      # Perşembe (Elibüyük Salı OFF iken Buse Açılış)
@@ -183,7 +183,7 @@ def generate_armada_master_schedule(seed=None):
         for name, off_d in ft_off_map.items():
             schedule[name][s_d + off_d] = OFF
 
-        # 4. FT ÇALIŞMA GÜNLERİNDE AÇILIŞ SINIRLI VE DENGELİ DAĞITIM
+        # 4. FT ÇALIŞMA GÜNLERİNDE DENGELİ VARDİYA ATAMA (AÇILIŞ MAX 3 BARİSTA, HAFTA SONU KAPANIŞ NET 5 BARİSTA + 1 ARACI)
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
@@ -203,40 +203,43 @@ def generate_armada_master_schedule(seed=None):
                 else:
                     schedule["Buse Kayabalı"][abs_d] = A_FT if (day in [0, 2]) else K_FT
 
-            # Diğer 7 FT Barista İçin Açılışı Maksimum 3 Barista İle Sınırla (Fazlalıklar 10:00 ve 12:00 Aracı)
+            # Diğer FT Baristalar
             other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
             
-            # Şu ana kadar o gün açılışa yazılmış barista sayısı
             current_barista_open = sum(1 for name in ["Cansu Elibüyük", "Vahti Ünal", "Buse Kayabalı", "Emir Altunbulak", "Hayrunnisa Erdoğan"] if schedule[name][abs_d] in [A_FT, A_PT])
-            needed_barista_open = max(0, 3 - current_barista_open) # KESİNLİKLE EN FAZLA 3 BARİSTA AÇILIŞ
+            current_barista_close = sum(1 for name in ["Cansu Elibüyük", "Vahti Ünal", "Buse Kayabalı", "Emir Altunbulak", "Hayrunnisa Erdoğan"] if schedule[name][abs_d] in [K_FT, K_PT])
+            
+            needed_barista_open = max(0, 3 - current_barista_open)   # En fazla 3 Barista Açılış (+ 1 Müdür = 4 Kişi)
+            needed_barista_close = max(0, (5 if is_weekend else 4) - current_barista_close) # Hafta sonu Net 5 Barista Kapanış (+ 1 Müdür = 6 Kişi)
             
             working_others = [b for b in other_ft if day != ft_off_map[b]]
             
             assigned_openers = 0
-            assigned_ara_10 = 0
+            assigned_closers = 0
             assigned_ara_12 = 0
+            assigned_ara_10 = 0
             
             for b in working_others:
                 can_open = True
-                # Denetim: Ceyda & Yusuf Efe hafta içi aynı gün açılış olamaz
                 if not is_weekend and b == "Yusuf Efe Aydoğmuş" and schedule["Ceyda Işık"][abs_d] == A_FT:
                     can_open = False
                 if not is_weekend and b == "Ceyda Işık" and schedule["Yusuf Efe Aydoğmuş"][abs_d] == A_FT:
                     can_open = False
-                # Ergonomi: Kapanıştan sonraki gün Açılış olamaz
                 if abs_d > 0 and schedule[b][abs_d - 1] in CLOSE_SET:
                     can_open = False
                     
-                # Dağıtım hiyerarşisi: Önce ihtiyaç kadar açılış (max 3 barista), fazlalar 10:00 ve 12:00 araçısı
                 if assigned_openers < needed_barista_open and can_open:
                     schedule[b][abs_d] = A_FT
                     assigned_openers += 1
-                elif assigned_ara_10 == 0 and not is_weekend:
-                    schedule[b][abs_d] = ARA_10
-                    assigned_ara_10 += 1
-                elif assigned_ara_12 == 0 and not is_weekend:
+                elif assigned_closers < needed_barista_close:
+                    schedule[b][abs_d] = K_FT
+                    assigned_closers += 1
+                elif assigned_ara_12 == 0:
                     schedule[b][abs_d] = ARA_12
                     assigned_ara_12 += 1
+                elif assigned_ara_10 == 0:
+                    schedule[b][abs_d] = ARA_10
+                    assigned_ara_10 += 1
                 else:
                     schedule[b][abs_d] = K_FT
 
