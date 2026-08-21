@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import base64
 import random
+from datetime import datetime
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
 
@@ -51,7 +52,7 @@ st.markdown(f"""
     <img src="{LOGO_DATA_URI}" class="logo-img" alt="Logo">
     <div>
         <h1 class="header-title">Armada Starbucks Vardiya & Aylık Raporlama Yönetimi</h1>
-        <p class="header-sub">OPERATIONAL STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
+        <p class="header-sub">OPERATIONAL STORE MANAGEMENT & DYNAMIC SCHEDULING SYSTEM</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -134,53 +135,35 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # Haftanın her günü en az 1-2 aracı garantili, sıfır clopen rotasyon matrisi:
-    ft_rotations_with_ara = {
-        "Ceyda Işık": [
-            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
-            [OFF, A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT],
-            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
-            [OFF, A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT]
-        ],
-        "Yusuf Efe Aydoğmuş": [
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF],
-            [A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT, OFF],
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF],
-            [A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT, OFF]
-        ],
-        "Elif Karaca": [
-            [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
-            [OFF, A_FT, A_FT, K_FT, ARA_10, K_FT, K_FT],
-            [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
-            [OFF, A_FT, A_FT, K_FT, ARA_10, K_FT, K_FT]
-        ],
-        "Cansu Yüksel": [
-            [A_FT, ARA_12, A_FT, K_FT, K_FT, K_FT, OFF],
-            [A_FT, ARA_10, A_FT, K_FT, K_FT, K_FT, OFF],
-            [A_FT, ARA_12, A_FT, K_FT, K_FT, K_FT, OFF],
-            [A_FT, ARA_10, A_FT, K_FT, K_FT, K_FT, OFF]
-        ],
-        "Ebrar Sena Akkaya": [
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, ARA_12, OFF],
-            [A_FT, A_FT, ARA_12, K_FT, K_FT, ARA_10, OFF],
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, ARA_12, OFF],
-            [A_FT, A_FT, ARA_12, K_FT, K_FT, ARA_10, OFF]
-        ],
-        "Ahmet Emre Demren": [
-            [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_10, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_10, A_FT, A_FT, K_FT, K_FT, K_FT, OFF]
-        ],
-        "Ayça Yiğit": [
-            [ARA_10, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_10, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-            [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF]
-        ]
-    }
+    # 7 Esnek Barista için Sıfır Clopen ve 3 Kapanış + 2 Açılış + 1 Ara + 1 OFF Garantili Dinamik Blok Havuzu
+    rot_patterns_pool = [
+        [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
+        [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF],
+        [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
+        [A_FT, ARA_12, A_FT, K_FT, K_FT, K_FT, OFF],
+        [A_FT, A_FT, ARA_10, K_FT, K_FT, ARA_12, OFF],
+        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
+        [ARA_10, A_FT, A_FT, K_FT, K_FT, K_FT, OFF]
+    ]
 
-    # Sıfır Clopen Müdür Şablonu:
+    flex_names = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
+
+    # Her ay ve tohum için dinamik permütasyon
+    base_order = list(range(len(flex_names)))
+    rng.shuffle(base_order)
+
+    ft_rotations_dynamic = {}
+    for i, name in enumerate(flex_names):
+        person_weeks = []
+        for w in range(4):
+            idx = (base_order[i] + w + (seed % 7)) % len(rot_patterns_pool)
+            pat = rot_patterns_pool[idx][:]
+            if w % 2 == 1:
+                pat = [ARA_10 if s == ARA_12 else (ARA_12 if s == ARA_10 else s) for s in pat]
+            person_weeks.append(pat)
+        ft_rotations_dynamic[name] = person_weeks
+
+    # Sıfır Clopen Müdür Rotasyonu
     mgr_pattern = [
         {"Onur Kaynak": OFF,   "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": A_MGR}, # Pzt
         {"Onur Kaynak": A_MGR, "Banu Sezer": OFF,     "Göktuğ Gökdemir": A_MGR}, # Sal
@@ -188,7 +171,7 @@ def generate_armada_master_schedule(seed=None):
         {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": OFF},   # Per
         {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR}, # Cum
         {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR}, # Cts
-        {"Onur Kaynak": K_MGR, "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": MID_MGR}, # Paz (SM 1 Kapanış, SSV 09:00 Ara)
+        {"Onur Kaynak": K_MGR, "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": MID_MGR}, # Paz (SM 1 Kapanış)
     ]
 
     emir_shifts = [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF]
@@ -234,8 +217,8 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = K_FT
 
-            for b in ft_rotations_with_ara.keys():
-                schedule[b][abs_d] = ft_rotations_with_ara[b][w_idx][day]
+            for b in flex_names:
+                schedule[b][abs_d] = ft_rotations_dynamic[b][w_idx][day]
 
     weeks_dict = {}
     for w in range(4):
@@ -271,7 +254,7 @@ with c_gen:
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
         st.session_state.current_schedule = generate_armada_master_schedule(seed=new_seed)
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı ve dengeli kadro üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı ve dinamik vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = st.session_state.current_schedule
