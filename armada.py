@@ -133,46 +133,44 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # 1. MÜDÜRLERİN 4 HAFTA BOYUNCA TAMAMEN DÖNÜŞÜMLÜ VE ÇAKIŞMASIZ ÇALIŞMA PLANI:
+    # 1. MÜDÜRLERİN 4 HAFTALIK SIFIR CLOPEN VE ÇAKIŞMASIZ ÇALIŞMA PLANI:
     mgr_4weeks = {
         "Onur Kaynak": [
             [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
-            [A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, A_MGR, OFF],
-            [A_MGR, A_MGR, A_MGR, K_MGR, A_MGR, A_MGR, OFF],
-            [A_MGR, A_MGR, K_MGR, A_MGR, A_MGR, A_MGR, OFF]
+            [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
+            [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
+            [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF]
         ],
         "Banu Sezer": [
             [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR],
-            [MID_MGR, MID_MGR, MID_MGR, OFF, A_MGR, A_MGR, K_MGR],
-            [K_MGR, K_MGR, OFF,   A_MGR, A_MGR, K_MGR, MID_MGR],
-            [MID_MGR, OFF,   A_MGR, A_MGR, K_MGR, K_MGR, A_MGR]
+            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, OFF, A_MGR, A_MGR],
+            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR],
+            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, OFF, A_MGR, A_MGR]
         ],
         "Göktuğ Gökdemir": [
             [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR],
-            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   MID_MGR, A_MGR],
-            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   A_MGR],
-            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, K_MGR]
+            [K_MGR, K_MGR, K_MGR, K_MGR, K_MGR, OFF,   K_MGR],
+            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR],
+            [K_MGR, K_MGR, K_MGR, K_MGR, K_MGR, OFF,   K_MGR]
         ]
     }
 
-    # 2. 7 ESNEK FULL-TIME BARİSTA İÇİN HER HAFTA FARKLI BİR VARDİYA ŞABLONU (7'Lİ GÜVENLİ DÖNGÜ):
-    flawless_pool = [
+    # 2. 7 ESNEK BARİSTA İÇİN AÇILIŞTA ASLA 2 BARİSTA BIRAKMAYAN VE SIFIR CLOPEN SAĞLAYAN 7'Lİ DÖNGÜ:
+    perfect_7_pool = [
         [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], # 0
-        [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT], # 1
-        [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   # 2
-        [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, K_FT], # 3
-        [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], # 4
-        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF], # 5
-        [K_FT, K_FT, K_FT, OFF, ARA_10, A_FT, A_FT]  # 6
+        [A_FT, K_FT, K_FT, OFF, K_FT, ARA_10, A_FT], # 1 (Pazartesi Açılışa Destek Verir)
+        [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT], # 2
+        [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   # 3
+        [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, K_FT], # 4
+        [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], # 5
+        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF]  # 6
     ]
 
     flex_names = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
     
-    # Aylık tohumla permütasyon oluştur
     perm = list(range(len(flex_names)))
     rng.shuffle(perm)
 
-    # Part-Time Baristalar için 4 haftalık değişken çalışma günleri (Haftada kesin 28s = 4 gün):
     emir_4weeks = [
         [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF],
         [A_PT, OFF, A_PT, K_PT, K_PT, OFF, OFF],
@@ -193,7 +191,6 @@ def generate_armada_master_schedule(seed=None):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            # Müdürlerin haftalık değişen vardiyaları
             for m in ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]:
                 schedule[m][abs_d] = mgr_4weeks[m][w_idx][day]
 
@@ -228,10 +225,10 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = K_FT
 
-            # 7 Esnek Barista: (perm[i] + w_idx * 2) % 7 sayesinde HER HAFTA TAMAMEN FARKLI VARDİYA ALIR!
+            # 7 Esnek Barista: Her hafta farklı şablon alır
             for i, b in enumerate(flex_names):
-                pat_idx = (perm[i] + w_idx * 2) % len(flawless_pool)
-                schedule[b][abs_d] = flawless_pool[pat_idx][day]
+                pat_idx = (perm[i] + w_idx) % len(perfect_7_pool)
+                schedule[b][abs_d] = perfect_7_pool[pat_idx][day]
 
     weeks_dict = {}
     for w in range(4):
