@@ -134,13 +134,13 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # Hafta içi kapanışın asla 3+1 olmayacağı (kesin 4+1 = 5), hafta sonu kapanışın 5+1 = 6 olacağı, açılışın max 4+1 olacağı kesin rotasyon:
+    # Pazar ve Cumartesi kapanışını NET 5 Barista + 1 Müdür = 6 Kişi yapan, fazlaları 10:00 ve 12:00 araçısına aktaran kesin rotasyon:
     ft_rotations_clean = {
         "Ceyda Işık": [
             [OFF, K_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
             [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12],
-            [OFF, K_FT, K_FT, K_FT, K_FT, K_FT, ARA_12],
-            [OFF, K_FT, A_FT, K_FT, K_FT, K_FT, ARA_12]
+            [OFF, K_FT, K_FT, K_FT, K_FT, K_FT, ARA_10],
+            [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12]
         ],
         "Yusuf Efe Aydoğmuş": [
             [K_FT, ARA_10, K_FT, A_FT, A_FT, A_FT, OFF],
@@ -155,16 +155,16 @@ def generate_armada_master_schedule(seed=None):
             [K_FT, K_FT, A_FT, K_FT, K_FT, OFF, K_FT]
         ],
         "Cansu Yüksel": [
-            [K_FT, K_FT, OFF, ARA_12, K_FT, K_FT, A_FT],
+            [K_FT, K_FT, OFF, ARA_12, K_FT, K_FT, K_FT],
             [K_FT, ARA_12, OFF, A_FT, K_FT, K_FT, K_FT],
             [K_FT, A_FT, OFF, K_FT, ARA_10, K_FT, K_FT],
             [K_FT, A_FT, OFF, ARA_12, K_FT, K_FT, K_FT]
         ],
         "Ebrar Sena Akkaya": [
-            [K_FT, K_FT, OFF, A_FT, A_FT, ARA_12, K_FT],
-            [K_FT, K_FT, OFF, K_FT, ARA_12, K_FT, K_FT],
-            [K_FT, K_FT, OFF, K_FT, K_FT, ARA_10, K_FT],
-            [K_FT, K_FT, OFF, A_FT, ARA_12, K_FT, K_FT]
+            [K_FT, K_FT, OFF, A_FT, A_FT, ARA_10, ARA_12],
+            [K_FT, K_FT, OFF, K_FT, ARA_12, ARA_10, ARA_12],
+            [K_FT, K_FT, OFF, K_FT, K_FT, ARA_10, ARA_12],
+            [K_FT, K_FT, OFF, A_FT, ARA_12, ARA_10, ARA_12]
         ],
         "Ahmet Emre Demren": [
             [ARA_12, A_FT, K_FT, K_FT, K_FT, A_FT, OFF],
@@ -173,10 +173,10 @@ def generate_armada_master_schedule(seed=None):
             [ARA_12, OFF, A_FT, K_FT, K_FT, A_FT, OFF]
         ],
         "Ayça Yiğit": [
-            [ARA_10, OFF, K_FT, ARA_10, K_FT, A_FT, K_FT],
-            [ARA_10, OFF, K_FT, ARA_12, K_FT, K_FT, K_FT],
-            [ARA_10, OFF, K_FT, K_FT, ARA_10, K_FT, K_FT],
-            [ARA_10, OFF, K_FT, ARA_10, K_FT, K_FT, K_FT]
+            [ARA_10, OFF, K_FT, ARA_10, K_FT, A_FT, A_FT],
+            [ARA_10, OFF, K_FT, ARA_12, K_FT, A_FT, A_FT],
+            [ARA_10, OFF, K_FT, K_FT, ARA_10, A_FT, A_FT],
+            [ARA_10, OFF, K_FT, ARA_10, K_FT, A_FT, A_FT]
         ]
     }
 
@@ -198,7 +198,7 @@ def generate_armada_master_schedule(seed=None):
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
         emir_work_days = [0, 2, 4, 6]
-        hayru_work_days = [1, 2, 3, 5]
+        hayru_work_days = [1, 3, 5]
         for day in range(7):
             abs_d = s_d + day
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4] else K_PT) if day in emir_work_days else OFF
