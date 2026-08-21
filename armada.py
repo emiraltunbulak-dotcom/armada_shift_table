@@ -5,8 +5,6 @@ import os
 import re
 import base64
 import random
-import calendar
-from datetime import datetime
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
 
@@ -97,8 +95,6 @@ A_PT = "07:30-15:30"
 K_PT = "16:00-00:00"
 OFF = "OFF"
 
-CLOSE_SET = {K_MGR, K_FT, K_PT}
-
 def calculate_net_hours(shift_str):
     s = str(shift_str).strip().upper()
     if not s or s in ["OFF", "BOŞ", "-", "0", "NONE"]:
@@ -133,7 +129,6 @@ def format_hour(h):
     h = round(float(h), 2)
     return f"{int(h)}s" if h.is_integer() else f"{h:.1f}s"
 
-# HİYERARŞİK KURAL VE KESİN KOTA MOTORU
 def generate_armada_master_schedule(seed=None):
     if seed is None:
         seed = 42
@@ -146,7 +141,7 @@ def generate_armada_master_schedule(seed=None):
     for w_idx in range(4):
         s_d = w_idx * 7
         
-        # 1. MÜDÜRLER (Haftada 1 OFF = 45.0s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
+        # 1. MÜDÜRLER (Haftalık 1 OFF = 45s, Onur SM haftada 1 Kapanış, Müdür Açılışken SSV 09:00 Ara)
         mgr_pattern = [
             {"Onur Kaynak": OFF,   "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR},
             {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR},
@@ -161,7 +156,7 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
-        # 2. PART-TIME BARİSTALAR (Haftalık kesin 4 gün iş = 28.0s, 4 hafta toplamı = 112.0s)
+        # 2. PT BARİSTALAR: KESİN VE DOKUNULMAZ 4 GÜN İŞ (28s), 3 GÜN OFF -> 4 HAFTADA 112s
         emir_work_days = [0, 2, 4, 6]
         hayru_work_days = [1, 2, 3, 5]
         for day in range(7):
@@ -187,7 +182,7 @@ def generate_armada_master_schedule(seed=None):
         for name, off_d in ft_off_map.items():
             schedule[name][s_d + off_d] = OFF
 
-        # 4. FT ÇALIŞMA GÜNLERİ İÇİNDE VARDİYA ATAMA (6 GÜN İŞ = 45.0s)
+        # 4. FT ÇALIŞMA GÜNLERİ İÇİNDE VARDİYA ATAMA (6 GÜN İŞ = 45.0s -> 4 HAFTADA 180s)
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
@@ -207,11 +202,11 @@ def generate_armada_master_schedule(seed=None):
             if day != ft_off_map["Vahti Ünal"]:
                 schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
-            # Diğer FT Baristalar: 3 Açılış / 3 Kapanış / 1 Ara dengesi
+            # Diğer FT Baristalar: 3 Açılış / 3 Kapanış / 1 Ara dengesi (OFF günlerine ASLA dokunulmaz)
             other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
             for b in other_ft:
                 if day == ft_off_map[b]:
-                    continue # OFF olan güne ASLA dokunulamaz
+                    continue
                 if b == "Ceyda Işık":
                     schedule[b][abs_d] = A_FT if day in [1, 2, 3] else (K_FT if day in [4, 5] else ARA_12)
                 elif b == "Yusuf Efe Aydoğmuş":
@@ -226,15 +221,6 @@ def generate_armada_master_schedule(seed=None):
                     schedule[b][abs_d] = A_FT if day in [0, 2, 3] else (K_FT if day in [1, 6] else ARA_10)
                 elif b == "Ayça Yiğit":
                     schedule[b][abs_d] = A_FT if day in [0, 1, 5] else (K_FT if day in [2, 3, 4] else ARA_12)
-
-        # Kapanıştan Açılışa Geçiş Düzeltmesi (SADECE ÇALIŞMA GÜNLERİNDE VARDİYA DEĞİŞTİRİLİR, OFF ASLA BOZULMAZ)
-        for b in ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]:
-            for d in range(1, 7):
-                cur_abs = s_d + d
-                if d == ft_off_map[b]:
-                    continue
-                if schedule[b][cur_abs - 1] in CLOSE_SET and schedule[b][cur_abs] == A_FT:
-                    schedule[b][cur_abs] = K_FT
 
     weeks_dict = {}
     for w in range(4):
