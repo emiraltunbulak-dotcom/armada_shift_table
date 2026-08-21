@@ -133,45 +133,50 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # 1. MÜDÜRLERİN ASLA AYNI VARDİYAYA GELMEDİĞİ, 180s KOTAYI TAM DOLDURAN VE SIFIR CLOPEN HAFTALIK DİZİLİMİ:
-    # Onur SM haftada 1 Kapanış (Cumartesi), 1 OFF (Pazar); Banu ve Göktuğ dengeli Kapanış, Açılış ve 09:00 Ara yapar.
-    mgr_schedule = {
+    # 1. MÜDÜRLERİN ASLA AYNI VARDİYAYA GELMEDİĞİ VE HAFTADAN HAFTAYA GÖREV DEĞİŞTİRDİĞİ ROTASYON:
+    mgr_schedule_odd = {
         "Onur Kaynak":     [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
         "Banu Sezer":      [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR],
         "Göktuğ Gökdemir": [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR]
     }
+    mgr_schedule_even = {
+        "Onur Kaynak":     [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
+        "Banu Sezer":      [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR],
+        "Göktuğ Gökdemir": [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR]
+    }
 
-    # 2. FULL-TIME BARİSTALAR İÇİN SIFIR CLOPEN VE HAFTALIK DİNAMİK 3K + 2A + 1ARA + 1OFF ŞABLON HAVUZU:
-    base_chains = [
-        [[OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_10, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_10, A_FT, A_FT]],
-        [[A_FT, K_FT, K_FT, OFF, K_FT, ARA_10, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_12, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_10, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_12, A_FT]],
-        [[K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT], [K_FT, OFF, A_FT, ARA_12, A_FT, K_FT, K_FT], [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT], [K_FT, OFF, A_FT, ARA_12, A_FT, K_FT, K_FT]],
-        [[K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT]],
-        [[A_FT, A_FT, K_FT, K_FT, ARA_12, K_FT, OFF], [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF], [A_FT, A_FT, K_FT, K_FT, ARA_12, K_FT, OFF], [A_FT, A_FT, K_FT, K_FT, ARA_10, K_FT, OFF]],
-        [[K_FT, ARA_12, A_FT, A_FT, K_FT, OFF, K_FT], [K_FT, ARA_10, A_FT, A_FT, K_FT, OFF, K_FT], [K_FT, ARA_12, A_FT, A_FT, K_FT, OFF, K_FT], [K_FT, ARA_10, A_FT, A_FT, K_FT, OFF, K_FT]],
-        [[ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], [ARA_12, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], [ARA_12, K_FT, K_FT, K_FT, OFF, A_FT, A_FT]]
+    # 2. 7 ESNEK FULL-TIME BARİSTA İÇİN HER HAFTA FARKLI VARDİYA VEREN VE ASLA CLOPEN YAPMAYAN 7'Lİ ŞABLON HAVUZU:
+    flawless_pool = [
+        [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT],
+        [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT],
+        [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],
+        [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, K_FT],
+        [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT],
+        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
+        [K_FT, K_FT, K_FT, OFF, ARA_10, A_FT, A_FT]
     ]
 
     flex_names = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
     
-    # Her buton tıklandığında veya ay değiştiğinde farklı zincir ataması
+    # Her ay ve butona tıklamada başlangıç sırasını dinamik olarak karıştır
     perm = list(range(len(flex_names)))
     rng.shuffle(perm)
-    ft_rotations_dynamic = {flex_names[i]: base_chains[perm[i]] for i in range(len(flex_names))}
 
-    # Part-Time Şablonları (Her hafta kesin 4 gün iş = 28s, 4 haftada 112s):
+    # Part-Time Şablonları (Her hafta kesin 4 gün = 28s, 4 haftada 112s):
     emir_shifts = [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF]
     hayru_shifts = [OFF, OFF, A_PT, A_PT, OFF, K_PT, K_PT]
 
     for w_idx in range(4):
         s_d = w_idx * 7
+        mgr_sched = mgr_schedule_odd if w_idx % 2 == 0 else mgr_schedule_even
+        
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            # Müdürlerin atanması (Her gün tek bir müdür tek bir vardiyada, çakışma kesinlikle yok)
+            # Müdürlerin atanması (Asla aynı vardiyaya denk gelmezler)
             for m in ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]:
-                schedule[m][abs_d] = mgr_schedule[m][day]
+                schedule[m][abs_d] = mgr_sched[m][day]
 
             schedule["Emir Altunbulak"][abs_d] = emir_shifts[day]
             schedule["Hayrunnisa Erdoğan"][abs_d] = hayru_shifts[day]
@@ -204,8 +209,10 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = K_FT
 
-            for b in flex_names:
-                schedule[b][abs_d] = ft_rotations_dynamic[b][w_idx][day]
+            # 7 Esnek Barista: (perm[i] + w_idx) % 7 sayesinde HER HAFTA FARKLI BİR VARDİYA ALIR!
+            for i, b in enumerate(flex_names):
+                pat_idx = (perm[i] + w_idx) % len(flawless_pool)
+                schedule[b][abs_d] = flawless_pool[pat_idx][day]
 
     weeks_dict = {}
     for w in range(4):
