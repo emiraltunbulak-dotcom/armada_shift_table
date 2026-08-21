@@ -134,8 +134,8 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # Pazar ve Cumartesi kapanışını NET 5 Barista + 1 Müdür = 6 Kişi yapan, fazlaları 10:00 ve 12:00 araçısına aktaran kesin rotasyon:
-    ft_rotations_clean = {
+    # Her hafta tam 6 gün iş (45s) ve tam 1 OFF garanti eden, pazar/cts kapanışı net 5 barista + 1 müdür = 6 kişi yapan rotasyon:
+    ft_rotations_flawless = {
         "Ceyda Işık": [
             [OFF, K_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
             [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12],
@@ -168,9 +168,9 @@ def generate_armada_master_schedule(seed=None):
         ],
         "Ahmet Emre Demren": [
             [ARA_12, A_FT, K_FT, K_FT, K_FT, A_FT, OFF],
-            [ARA_12, OFF, A_FT, K_FT, K_FT, A_FT, OFF],
-            [ARA_12, OFF, K_FT, ARA_12, K_FT, A_FT, OFF],
-            [ARA_12, OFF, A_FT, K_FT, K_FT, A_FT, OFF]
+            [ARA_12, A_FT, A_FT, K_FT, K_FT, A_FT, OFF],
+            [ARA_12, K_FT, K_FT, ARA_12, K_FT, A_FT, OFF],
+            [ARA_12, A_FT, A_FT, K_FT, K_FT, A_FT, OFF]
         ],
         "Ayça Yiğit": [
             [ARA_10, OFF, K_FT, ARA_10, K_FT, A_FT, A_FT],
@@ -197,12 +197,13 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
+        # PT Baristalar (Her hafta kesin 4 gün iş = 28s, 4 haftada 112s)
         emir_work_days = [0, 2, 4, 6]
-        hayru_work_days = [1, 3, 5]
+        hayru_work_days = [1, 3, 5, 6]
         for day in range(7):
             abs_d = s_d + day
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4] else K_PT) if day in emir_work_days else OFF
-            schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 3] else K_PT) if day in hayru_work_days else OFF
+            schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 3] else (K_PT if day == 5 else A_PT)) if day in hayru_work_days else OFF
 
         for day in range(7):
             abs_d = s_d + day
@@ -225,8 +226,8 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = A_FT if day in [0, 2] else K_FT
 
-            for b in ft_rotations_clean.keys():
-                schedule[b][abs_d] = ft_rotations_clean[b][w_idx][day]
+            for b in ft_rotations_flawless.keys():
+                schedule[b][abs_d] = ft_rotations_flawless[b][w_idx][day]
 
     weeks_dict = {}
     for w in range(4):
