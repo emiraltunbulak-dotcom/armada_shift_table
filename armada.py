@@ -134,8 +134,19 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # Hafta içi: Açılış 3B+1M (Kapanış 4B/5B+1M) veya 4B+1M; Kalanlar 10:00 ve 12:00
-    # Sıfır Clopen ve 3 Kapanış + 2 Açılış + 1 Ara + 1 OFF Garantili 4 Haftalık Şablon Havuzu
+    # 1. MÜDÜRLERİN ASLA AYNI VARDİYAYA GELMEDİĞİ, HAFTALIK DİNAMİK VE SIFIR CLOPEN ROTASYON ŞABLONLARI:
+    # Her gün çalışan müdürler mutlaka 3 farklı göreve dağılır: [Açılış (07:30), Ara (09:00), Kapanış (15:30) veya 1'i OFF]
+    mgr_daily_slots = [
+        [A_MGR, K_MGR, OFF],     # Pzt (1 Açılış, 1 Kapanış, 1 OFF - Asla Çakışma Yok)
+        [A_MGR, MID_MGR, K_MGR], # Sal (1 Açılış, 1 Ara 09:00, 1 Kapanış)
+        [A_MGR, MID_MGR, K_MGR], # Çar (1 Açılış, 1 Ara 09:00, 1 Kapanış)
+        [A_MGR, K_MGR, OFF],     # Per (1 Açılış, 1 Kapanış, 1 OFF)
+        [A_MGR, K_MGR, OFF],     # Cum (1 Açılış, 1 Kapanış, 1 OFF)
+        [A_MGR, MID_MGR, K_MGR], # Cts (1 Açılış, 1 Ara 09:00, 1 Kapanış)
+        [A_MGR, MID_MGR, K_MGR], # Paz (1 Açılış, 1 Ara 09:00, 1 Kapanış - SM Onur Kapanış)
+    ]
+
+    # 2. FULL-TIME DİNAMİK ROTASYON ZİNCİRLERİ (Haftalık & Aylık Değişen, Sıfır Clopen ve 3K + 2A + 1Ara + 1OFF):
     base_chains = [
         [[OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_10, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], [OFF, K_FT, K_FT, K_FT, ARA_10, A_FT, A_FT]],
         [[A_FT, K_FT, K_FT, OFF, K_FT, ARA_10, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_12, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_10, A_FT], [A_FT, K_FT, K_FT, OFF, K_FT, ARA_12, A_FT]],
@@ -148,33 +159,38 @@ def generate_armada_master_schedule(seed=None):
 
     flex_names = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
     
+    # Aylık / Tohuma göre permütasyon (her ay ve butona basışta bambaşka dizilim)
     perm = list(range(len(flex_names)))
     rng.shuffle(perm)
-
     ft_rotations_dynamic = {flex_names[i]: base_chains[perm[i]] for i in range(len(flex_names))}
 
-    # Sıfır Clopen Müdür Şablonu:
-    mgr_pattern = [
-        {"Onur Kaynak": OFF,   "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": A_MGR}, # Pzt
-        {"Onur Kaynak": A_MGR, "Banu Sezer": OFF,     "Göktuğ Gökdemir": A_MGR}, # Sal
-        {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR}, # Çar (Müdür Açılışken SSV 09:00 Ara)
-        {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": OFF},   # Per
-        {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR}, # Cum
-        {"Onur Kaynak": A_MGR, "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR}, # Cts
-        {"Onur Kaynak": K_MGR, "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": MID_MGR}, # Paz (SM 1 Kapanış, SSV 09:00 Ara)
-    ]
-
+    # Part-Time Şablonları (Her hafta kesin 4 gün iş = 28s):
     emir_shifts = [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF]
     hayru_shifts = [OFF, OFF, A_PT, A_PT, OFF, K_PT, K_PT]
 
     for w_idx in range(4):
         s_d = w_idx * 7
+        
+        # Müdürlerin haftalık dinamik rotasyonu (Her hafta Onur SM, Banu SSV, Göktuğ SSV farklı günlerde açılış/ara/kapanış yapar):
+        mgr_w_order = [(w_idx + i) % 3 for i in range(3)]
+        
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            for m in mgr_names:
-                schedule[m][abs_d] = mgr_pattern[day][m]
+            # Müdürleri günlük görevlere dağıt (Asla aynı vardiyaya denk gelmezler)
+            day_m_roles = mgr_daily_slots[day]
+            if day == 6: # Pazar günü SM Onur mutlaka Kapanış yapar
+                schedule["Onur Kaynak"][abs_d] = K_MGR
+                schedule["Banu Sezer"][abs_d] = A_MGR if w_idx % 2 == 0 else MID_MGR
+                schedule["Göktuğ Gökdemir"][abs_d] = MID_MGR if w_idx % 2 == 0 else A_MGR
+            elif day == 0: # Pazartesi SM Onur OFF
+                schedule["Onur Kaynak"][abs_d] = OFF
+                schedule["Banu Sezer"][abs_d] = K_MGR
+                schedule["Göktuğ Gökdemir"][abs_d] = A_MGR
+            else:
+                for idx, m_name in enumerate(mgr_names):
+                    schedule[m_name][abs_d] = day_m_roles[mgr_w_order[idx]]
 
             schedule["Emir Altunbulak"][abs_d] = emir_shifts[day]
             schedule["Hayrunnisa Erdoğan"][abs_d] = hayru_shifts[day]
@@ -244,7 +260,7 @@ with c_gen:
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
         st.session_state.current_schedule = generate_armada_master_schedule(seed=new_seed)
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı ve dengeli kadro üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı ve dinamik vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = st.session_state.current_schedule
