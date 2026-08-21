@@ -134,48 +134,49 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    ft_rotations = {
+    # Hafta içi kapanışın asla 3+1 olmayacağı (kesin 4+1 = 5), hafta sonu kapanışın 5+1 = 6 olacağı, açılışın max 4+1 olacağı kesin rotasyon:
+    ft_rotations_clean = {
         "Ceyda Işık": [
-            [OFF, A_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
-            [A_FT, A_FT, ARA_10, OFF, K_FT, K_FT, K_FT],
-            [A_FT, A_FT, K_FT, K_FT, OFF, K_FT, ARA_12],
-            [K_FT, ARA_10, OFF, A_FT, A_FT, K_FT, K_FT]
+            [OFF, K_FT, ARA_12, K_FT, K_FT, K_FT, ARA_10],
+            [OFF, K_FT, ARA_10, K_FT, K_FT, K_FT, ARA_12],
+            [OFF, K_FT, K_FT, K_FT, K_FT, K_FT, ARA_12],
+            [OFF, K_FT, A_FT, K_FT, K_FT, K_FT, ARA_12]
         ],
         "Yusuf Efe Aydoğmuş": [
             [K_FT, ARA_10, K_FT, A_FT, A_FT, A_FT, OFF],
-            [OFF, K_FT, K_FT, ARA_12, A_FT, A_FT, A_FT],
-            [K_FT, K_FT, ARA_10, A_FT, A_FT, A_FT, OFF],
-            [A_FT, A_FT, K_FT, K_FT, ARA_12, A_FT, OFF]
+            [K_FT, K_FT, K_FT, A_FT, A_FT, A_FT, OFF],
+            [K_FT, K_FT, K_FT, A_FT, A_FT, A_FT, OFF],
+            [K_FT, ARA_10, K_FT, A_FT, A_FT, A_FT, OFF]
         ],
         "Elif Karaca": [
-            [ARA_10, K_FT, A_FT, K_FT, ARA_12, OFF, K_FT],
-            [A_FT, A_FT, A_FT, K_FT, K_FT, ARA_10, OFF],
-            [OFF, A_FT, A_FT, K_FT, ARA_12, K_FT, K_FT],
-            [A_FT, A_FT, ARA_10, K_FT, K_FT, K_FT, OFF]
+            [K_FT, K_FT, A_FT, K_FT, ARA_12, OFF, K_FT],
+            [K_FT, K_FT, A_FT, K_FT, K_FT, OFF, K_FT],
+            [K_FT, K_FT, A_FT, K_FT, ARA_12, OFF, K_FT],
+            [K_FT, K_FT, A_FT, K_FT, K_FT, OFF, K_FT]
         ],
         "Cansu Yüksel": [
-            [K_FT, A_FT, OFF, ARA_12, K_FT, K_FT, A_FT],
-            [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT],
-            [A_FT, A_FT, OFF, K_FT, ARA_10, K_FT, K_FT],
-            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT]
+            [K_FT, K_FT, OFF, ARA_12, K_FT, K_FT, A_FT],
+            [K_FT, ARA_12, OFF, A_FT, K_FT, K_FT, K_FT],
+            [K_FT, A_FT, OFF, K_FT, ARA_10, K_FT, K_FT],
+            [K_FT, A_FT, OFF, ARA_12, K_FT, K_FT, K_FT]
         ],
         "Ebrar Sena Akkaya": [
             [K_FT, K_FT, OFF, A_FT, A_FT, ARA_12, K_FT],
-            [A_FT, A_FT, K_FT, K_FT, ARA_12, OFF, K_FT],
-            [A_FT, K_FT, OFF, K_FT, K_FT, ARA_10, K_FT],
-            [K_FT, ARA_12, OFF, A_FT, A_FT, K_FT, K_FT]
+            [K_FT, K_FT, OFF, K_FT, ARA_12, K_FT, K_FT],
+            [K_FT, K_FT, OFF, K_FT, K_FT, ARA_10, K_FT],
+            [K_FT, K_FT, OFF, A_FT, ARA_12, K_FT, K_FT]
         ],
         "Ahmet Emre Demren": [
-            [ARA_12, A_FT, K_FT, K_FT, A_FT, A_FT, OFF],
-            [A_FT, OFF, A_FT, A_FT, K_FT, K_FT, ARA_10],
-            [A_FT, A_FT, K_FT, ARA_12, K_FT, OFF, K_FT],
-            [A_FT, A_FT, A_FT, K_FT, OFF, K_FT, ARA_10]
+            [ARA_12, A_FT, K_FT, K_FT, K_FT, A_FT, OFF],
+            [ARA_12, OFF, A_FT, K_FT, K_FT, A_FT, OFF],
+            [ARA_12, OFF, K_FT, ARA_12, K_FT, A_FT, OFF],
+            [ARA_12, OFF, A_FT, K_FT, K_FT, A_FT, OFF]
         ],
         "Ayça Yiğit": [
-            [A_FT, OFF, K_FT, ARA_10, K_FT, A_FT, K_FT],
-            [OFF, A_FT, A_FT, ARA_12, K_FT, K_FT, K_FT],
-            [A_FT, OFF, K_FT, K_FT, ARA_10, K_FT, A_FT],
-            [A_FT, A_FT, ARA_12, K_FT, OFF, K_FT, K_FT]
+            [ARA_10, OFF, K_FT, ARA_10, K_FT, A_FT, K_FT],
+            [ARA_10, OFF, K_FT, ARA_12, K_FT, K_FT, K_FT],
+            [ARA_10, OFF, K_FT, K_FT, ARA_10, K_FT, K_FT],
+            [ARA_10, OFF, K_FT, ARA_10, K_FT, K_FT, K_FT]
         ]
     }
 
@@ -224,8 +225,8 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = A_FT if day in [0, 2] else K_FT
 
-            for b in ft_rotations.keys():
-                schedule[b][abs_d] = ft_rotations[b][w_idx][day]
+            for b in ft_rotations_clean.keys():
+                schedule[b][abs_d] = ft_rotations_clean[b][w_idx][day]
 
     weeks_dict = {}
     for w in range(4):
@@ -261,7 +262,7 @@ with c_gen:
     if st.button("🎲 Yeni Karışık / Dinamik Vardiya Üret", use_container_width=True, type="primary"):
         new_seed = random.randint(1, 999999)
         st.session_state.current_schedule = generate_armada_master_schedule(seed=new_seed)
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı hatasız vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı ve dengeli kadro üretildi!")
         st.rerun()
 
 current_month_weeks = st.session_state.current_schedule
