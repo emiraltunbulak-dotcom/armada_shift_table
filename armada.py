@@ -192,6 +192,7 @@ def generate_armada_master_schedule(seed=None):
     schedule = {name: ["OFF"] * 28 for name in all_names}
     hard_open = set()
 
+    # Onur SM haftalık 1 kapanış yapar, Çarşamba 0 OFF, müdür açılışken bir SSV kapanışsa diğeri 09:00-17:30
     mgr_pattern = [
         {"Onur Kaynak": OFF,   "Banu Sezer": K_MGR,   "Göktuğ Gökdemir": A_MGR},
         {"Onur Kaynak": A_MGR, "Banu Sezer": OFF,     "Göktuğ Gökdemir": A_MGR},
@@ -209,6 +210,7 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
+        # PT Baristalar: Haftalık kesin 4 gün iş = 28s, 3 gün OFF
         emir_work_days = [0, 2, 4, 6]
         hayru_work_days = [1, 2, 3, 5]
         for day in range(7):
@@ -216,6 +218,7 @@ def generate_armada_master_schedule(seed=None):
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4, 6] else K_PT) if day in emir_work_days else OFF
             schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 2] else K_PT) if day in hayru_work_days else OFF
 
+        # Cansu Elibüyük & Vahti Ünal
         weekdays = [0, 1, 2, 3, 4]
         elib_off = rng.choice(weekdays)
         vahti_off = rng.choice([d for d in weekdays if d != elib_off])
@@ -237,6 +240,7 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Vahti Ünal"][abs_d] = K_FT
 
+        # Günlük max 2 OFF kuralına göre OFF dağıtımı
         off_count = [0] * 7
         for day in range(7):
             abs_d = s_d + day
@@ -258,6 +262,7 @@ def generate_armada_master_schedule(seed=None):
             person_off[person] = chosen
             off_count[chosen] += 1
 
+        # Aracı volunteer (Haftada 1 gün 10 veya 12)
         ara_volunteer = flex_ft[w_idx % len(flex_ft)]
         ara_day_for = {}
         for person in flex_ft:
@@ -341,6 +346,7 @@ def generate_armada_master_schedule(seed=None):
                     p -= 1
                     steps += 1
 
+        # Denetim Kuralı: Ceyda & Yusuf Efe hafta içi aynı gün açılış olamaz
         for day in range(7):
             abs_d = s_d + day
             if schedule["Ceyda Işık"][abs_d] == A_FT and schedule["Yusuf Efe Aydoğmuş"][abs_d] == A_FT:
@@ -354,6 +360,7 @@ def generate_armada_master_schedule(seed=None):
                 else:
                     schedule["Yusuf Efe Aydoğmuş"][abs_d] = K_FT
 
+    # Kapanıştan açılışa geçiş kontrolleri
     exempt = {"Cansu Elibüyük", "Vahti Ünal"}
     for n in all_names:
         if n in exempt:
@@ -429,7 +436,7 @@ with c_gen:
         new_w = generate_armada_master_schedule(seed=new_seed)
         save_month_store(month_key, new_w)
         st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tüm kurallara uyumlu dinamik vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için mağaza kurallarına tam uyumlu vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = {w: pd.DataFrame(data) for w, data in st.session_state.app_store[month_key].items()}
