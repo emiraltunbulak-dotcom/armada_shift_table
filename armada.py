@@ -5,6 +5,7 @@ import os
 import re
 import base64
 import random
+from datetime import datetime
 
 st.set_page_config(page_title="Armada Starbucks Vardiya", layout="wide", initial_sidebar_state="collapsed")
 
@@ -34,28 +35,63 @@ LOGO_DATA_URI = f"data:image/svg+xml;base64,{logo_b64}"
 
 st.markdown(f"""
 <style>
-    .stApp {{ background-color: #080c14; color: #f8fafc; }}
+    .stApp {{
+        background-color: #080c14;
+        color: #f8fafc;
+    }}
     .bg-watermark {{
-        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        width: 620px; height: 620px; background-image: url('{LOGO_DATA_URI}');
-        background-repeat: no-repeat; background-position: center; background-size: contain;
-        opacity: 0.07; pointer-events: none; z-index: 0;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 620px;
+        height: 620px;
+        background-image: url('{LOGO_DATA_URI}');
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: contain;
+        opacity: 0.07;
+        pointer-events: none;
+        z-index: 0;
     }}
     .header-container {{
-        position: relative; z-index: 1; display: flex; align-items: center; gap: 18px;
-        margin-bottom: 20px; padding: 12px 20px; border-bottom: 2px solid #1e293b;
-        background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px); border-radius: 12px;
+        position: relative;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 20px;
+        padding: 12px 20px;
+        border-bottom: 2px solid #1e293b;
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
     }}
-    .logo-img {{ width: 58px; height: 58px; border-radius: 50%; box-shadow: 0 4px 16px rgba(0, 98, 65, 0.8); }}
-    .header-title {{ color: #ffffff; font-size: 24px; font-weight: 800; margin: 0; }}
-    .header-sub {{ color: #008248; font-size: 13px; font-weight: 700; margin: 2px 0 0 0; }}
+    .logo-img {{
+        width: 58px;
+        height: 58px;
+        border-radius: 50%;
+        box-shadow: 0 4px 16px rgba(0, 98, 65, 0.8);
+    }}
+    .header-title {{
+        color: #ffffff;
+        font-size: 24px;
+        font-weight: 800;
+        margin: 0;
+    }}
+    .header-sub {{
+        color: #008248;
+        font-size: 13px;
+        font-weight: 700;
+        margin: 2px 0 0 0;
+    }}
 </style>
 <div class="bg-watermark"></div>
 <div class="header-container">
     <img src="{LOGO_DATA_URI}" class="logo-img" alt="Logo">
     <div>
         <h1 class="header-title">Armada Starbucks Vardiya & Aylık Raporlama Yönetimi</h1>
-        <p class="header-sub">ZERO-ERROR STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
+        <p class="header-sub">OPERATIONAL STORE MANAGEMENT & SHIFT SCHEDULING SYSTEM</p>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -144,7 +180,8 @@ def generate_armada_master_schedule(seed=None):
     for w_idx in range(4):
         s_d = w_idx * 7
         
-        # 1. MÜDÜR ROTASYONU (Haftalık kesin 1 OFF = 45s)
+        # 1. KATMAN (DOKUNULMAZ OFF PLANLAMASI)
+        # Müdürler (Haftalık 1 OFF)
         mgr_pattern = [
             {"Onur Kaynak": OFF,   "Banu Sezer": A_MGR,   "Göktuğ Gökdemir": K_MGR},
             {"Onur Kaynak": A_MGR, "Banu Sezer": MID_MGR, "Göktuğ Gökdemir": K_MGR},
@@ -159,7 +196,7 @@ def generate_armada_master_schedule(seed=None):
             for m in mgr_names:
                 schedule[m][abs_d] = mgr_pattern[day][m]
 
-        # 2. PT BARİSTALAR (Haftalık kesin 4 gün iş = 28s, 3 gün OFF)
+        # PT Baristalar: Haftalık kesin 4 gün iş = 28s, 3 gün OFF
         emir_work_days = [0, 2, 4, 6]
         hayru_work_days = [1, 2, 3, 5]
         for day in range(7):
@@ -167,26 +204,25 @@ def generate_armada_master_schedule(seed=None):
             schedule["Emir Altunbulak"][abs_d] = (A_PT if day in [0, 4, 6] else K_PT) if day in emir_work_days else OFF
             schedule["Hayrunnisa Erdoğan"][abs_d] = (A_PT if day in [1, 2] else K_PT) if day in hayru_work_days else OFF
 
-        # 3. FT BARİSTALAR İÇİN KESİN GÜNLÜK MAX 2 OFF HARİTASI
-        # Her FT çalışana haftada KESİNLİKLE VE DEĞİŞTİRİLEMEZ 1 gün OFF verilir
+        # FT Baristalar için dokunulmaz haftalık 1 OFF haritası (Günde max 2 OFF kuralı)
         ft_off_map = {
-            "Cansu Elibüyük": 1,    # Salı
-            "Buse Kayabalı": 3,      # Perşembe
-            "Vahti Ünal": 4,         # Cuma
-            "Ceyda Işık": 0,         # Pazartesi
-            "Yusuf Efe Aydoğmuş": 4, # Cuma
-            "Elif Karaca": 6,        # Pazar
-            "Cansu Yüksel": 5,       # Cumartesi
-            "Ebrar Sena Akkaya": 1,  # Salı
-            "Ahmet Emre Demren": 5,  # Cumartesi
-            "Ayça Yiğit": 6          # Pazar
+            "Cansu Elibüyük": 1,    # Salı OFF
+            "Buse Kayabalı": 3,      # Perşembe OFF (Elibüyük Salı OFF iken Buse Açılış)
+            "Vahti Ünal": 4,         # Cuma OFF
+            "Ceyda Işık": 0,         # Pazartesi OFF
+            "Yusuf Efe Aydoğmuş": 4, # Cuma OFF
+            "Elif Karaca": 6,        # Pazar OFF
+            "Cansu Yüksel": 5,       # Cumartesi OFF
+            "Ebrar Sena Akkaya": 1,  # Salı OFF
+            "Ahmet Emre Demren": 5,  # Cumartesi OFF
+            "Ayça Yiğit": 6          # Pazar OFF
         }
 
-        # Önceden OFF hücrelerini DOKUNULMAZ olarak kilitliyoruz
+        # Dokunulmaz OFF hücrelerini kilitle
         for name, off_d in ft_off_map.items():
             schedule[name][s_d + off_d] = OFF
 
-        # 4. FT ÇALIŞMA GÜNLERİNE VARDİYA ATAMA (6 GÜN İŞ = 45s)
+        # 2. KATMAN (ÇALIŞMA GÜNLERİ İÇİNDE VARDİYA DENGESİ - ASLA EXTRA GÜN EKLENMEZ)
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
@@ -195,7 +231,7 @@ def generate_armada_master_schedule(seed=None):
             if day != ft_off_map["Cansu Elibüyük"]:
                 schedule["Cansu Elibüyük"][abs_d] = K_FT if is_weekend else A_FT
                 
-            # Buse Kayabalı (Elibüyük OFF iken Salı MUTLAKA Açılış)
+            # Buse Kayabalı (Elibüyük Salı OFF iken MUTLAKA Açılış)
             if day != ft_off_map["Buse Kayabalı"]:
                 if day == ft_off_map["Cansu Elibüyük"]:
                     schedule["Buse Kayabalı"][abs_d] = A_FT
@@ -206,15 +242,11 @@ def generate_armada_master_schedule(seed=None):
             if day != ft_off_map["Vahti Ünal"]:
                 schedule["Vahti Ünal"][abs_d] = A_FT if is_weekend else K_FT
 
-            # Diğer 7 FT Barista: 3 Açılış, 3 Kapanış, 1 Ara dengesi
+            # Diğer FT Baristalar
             other_ft = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
-            working_others = [b for b in other_ft if day != ft_off_map[b]]
-            
-            # Ceyda & Yusuf Efe Hafta İçi Açılış Denetimi
-            for b in working_others:
-                if schedule[b][abs_d] != OFF and schedule[b][abs_d] != "OFF":
-                    continue
-                # Standart dönüşümlü dağıtım
+            for b in other_ft:
+                if day == ft_off_map[b]:
+                    continue # OFF hücresine dokunulamaz
                 if b == "Ceyda Işık":
                     schedule[b][abs_d] = A_FT if day in [1, 2, 3] else (K_FT if day in [4, 5] else ARA_12)
                 elif b == "Yusuf Efe Aydoğmuş":
@@ -230,14 +262,13 @@ def generate_armada_master_schedule(seed=None):
                 elif b == "Ayça Yiğit":
                     schedule[b][abs_d] = A_FT if day in [0, 1, 5] else (K_FT if day in [2, 3, 4] else ARA_12)
 
-        # Kapanıştan Açılışa Geçişleri KESİNLİKLE OFF GÜNÜNÜ BOZMADAN DÜZELT
+        # Kapanıştan Açılışa Geçişleri KESİNLİKLE OFF GÜNÜNÜ BOZMADAN SADECE VARDİYA DÖNÜŞTÜREREK DÜZELT
         for b in ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]:
             for d in range(1, 7):
                 cur_abs = s_d + d
                 if schedule[b][cur_abs - 1] in CLOSE_SET and schedule[b][cur_abs] == A_FT:
-                    schedule[b][cur_abs] = K_FT # Açılışı güvenli kapanışa çevir
+                    schedule[b][cur_abs] = K_FT # Açılışı güvenli şekilde kapanışa çevir
 
-    # Haftalık DataFrame Sözlüğü
     weeks_dict = {}
     for w in range(4):
         start_d = w * 7
@@ -298,7 +329,7 @@ with c_gen:
         new_w = generate_armada_master_schedule(seed=new_seed)
         save_month_store(month_key, new_w)
         st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tam kotalı hatasız vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için hiyerarşik kurallara tam uyumlu vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = {w: pd.DataFrame(data) for w, data in st.session_state.app_store[month_key].items()}
