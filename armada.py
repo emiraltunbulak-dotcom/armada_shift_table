@@ -132,7 +132,6 @@ K_PT = "16:00-00:00"
 OFF = "OFF"
 
 WEEKEND_DAYS = {5, 6}
-WEDNESDAY = 2
 OPEN_SET = {A_MGR, A_FT, A_PT, MID_MGR}
 CLOSE_SET = {K_MGR, K_FT, K_PT}
 ARA_SET = {ARA_10, ARA_12, MID_MGR}
@@ -172,54 +171,6 @@ def format_hour(h):
     if h.is_integer():
         return f"{int(h)}s"
     return f"{h:.1f}s"
-
-def segments_from_offdays(work_days_all, excluded):
-    segs = []
-    cur = []
-    for d in range(7):
-        if d in excluded:
-            if cur:
-                segs.append(cur)
-                cur = []
-            continue
-        cur.append(d)
-    if cur:
-        segs.append(cur)
-    return segs
-
-def _plan_person_week_with_forced(schedule, person, s_d, off_day, ara_day, forced_day, t_open, t_close):
-    excluded = set()
-    if off_day is not None:
-        excluded.add(off_day)
-    if ara_day is not None:
-        excluded.add(ara_day)
-    if forced_day is not None:
-        excluded.add(forced_day)
-
-    segs = segments_from_offdays(list(range(7)), excluded)
-    remaining_open, remaining_close = t_open, t_close
-
-    for seg_idx, seg in enumerate(segs):
-        first_day = seg[0]
-        abs_first = s_d + first_day
-        must_all_close = False
-        if seg_idx == 0:
-            prev_real = schedule[person][abs_first - 1] if abs_first > 0 else None
-            if prev_real in CLOSE_SET:
-                must_all_close = True
-        n_open = 0 if must_all_close else min(remaining_open, len(seg))
-        n_close = len(seg) - n_open
-        for i, d in enumerate(seg):
-            abs_d = s_d + d
-            if i < n_open:
-                schedule[person][abs_d] = A_FT
-                remaining_open = max(0, remaining_open - 1)
-            else:
-                schedule[person][abs_d] = K_FT
-                remaining_close = max(0, remaining_close - 1)
-
-    if off_day is not None:
-        schedule[person][s_d + off_day] = OFF
 
 def generate_armada_master_schedule(seed=None):
     if seed is None:
@@ -301,7 +252,7 @@ def generate_armada_master_schedule(seed=None):
             forbidden = forced_work.get(person, set())
             candidates = sorted(
                 [d for d in range(7) if d not in forbidden],
-                key=lambda d: (off_count[d] >= 2, d == WEDNESDAY, off_count[d], rng.random())
+                key=lambda d: (off_count[d] >= 2, d == 2, off_count[d], rng.random())
             )
             chosen = next((d for d in candidates if off_count[d] < 2), candidates[0])
             person_off[person] = chosen
@@ -343,8 +294,40 @@ def generate_armada_master_schedule(seed=None):
                 else:
                     t_close -= 1
 
-            _plan_person_week_with_forced(schedule, person, s_d, off_day, ara_day,
-                                           forced_day, t_open, t_close)
+            excluded = set()
+            if off_day is not None: excluded.add(off_day)
+            if ara_day is not None: excluded.add(ara_day)
+            if forced_day is not None: excluded.add(forced_day)
+
+            segs = []
+            cur = []
+            for d in range(7):
+                if d in excluded:
+                    if cur: segs.append(cur); cur = []
+                    continue
+                cur.append(d)
+            if cur: segs.append(cur)
+
+            rem_open, rem_close = t_open, t_close
+            for seg_idx, seg in enumerate(segs):
+                abs_first = s_d + seg[0]
+                must_close = False
+                if seg_idx == 0:
+                    prev_real = schedule[person][abs_first - 1] if abs_first > 0 else None
+                    if prev_real in CLOSE_SET:
+                        must_close = True
+                n_op = 0 if must_close else min(rem_open, len(seg))
+                for i, d in enumerate(seg):
+                    abs_d = s_d + d
+                    if i < n_op:
+                        schedule[person][abs_d] = A_FT
+                        rem_open = max(0, rem_open - 1)
+                    else:
+                        schedule[person][abs_d] = K_FT
+                        rem_close = max(0, rem_close - 1)
+
+            if off_day is not None:
+                schedule[person][s_d + off_day] = OFF
 
             if ara_day is not None:
                 idx = flex_ft.index(person)
@@ -446,7 +429,7 @@ with c_gen:
         new_w = generate_armada_master_schedule(seed=new_seed)
         save_month_store(month_key, new_w)
         st.session_state.app_store[month_key] = {w: df.to_dict(orient="records") for w, df in new_w.items()}
-        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için mağaza kurallarına tam uyumlu vardiya üretildi!")
+        st.success(f"{MONTH_NAMES_TR[sel_month-1]} {sel_year} için tüm kurallara uyumlu dinamik vardiya üretildi!")
         st.rerun()
 
 current_month_weeks = {w: pd.DataFrame(data) for w, data in st.session_state.app_store[month_key].items()}
