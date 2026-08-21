@@ -133,53 +133,72 @@ def generate_armada_master_schedule(seed=None):
     all_names = [e["name"] for e in EMPLOYEES]
     schedule = {name: ["OFF"] * 28 for name in all_names}
 
-    # 1. MÜDÜRLERİN ASLA AYNI VARDİYAYA GELMEDİĞİ VE HAFTADAN HAFTAYA GÖREV DEĞİŞTİRDİĞİ ROTASYON:
-    mgr_schedule_odd = {
-        "Onur Kaynak":     [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
-        "Banu Sezer":      [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR],
-        "Göktuğ Gökdemir": [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR]
-    }
-    mgr_schedule_even = {
-        "Onur Kaynak":     [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
-        "Banu Sezer":      [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR],
-        "Göktuğ Gökdemir": [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR]
+    # 1. MÜDÜRLERİN 4 HAFTA BOYUNCA TAMAMEN DÖNÜŞÜMLÜ VE ÇAKIŞMASIZ ÇALIŞMA PLANI:
+    mgr_4weeks = {
+        "Onur Kaynak": [
+            [A_MGR, A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, OFF],
+            [A_MGR, A_MGR, A_MGR, A_MGR, K_MGR, A_MGR, OFF],
+            [A_MGR, A_MGR, A_MGR, K_MGR, A_MGR, A_MGR, OFF],
+            [A_MGR, A_MGR, K_MGR, A_MGR, A_MGR, A_MGR, OFF]
+        ],
+        "Banu Sezer": [
+            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, A_MGR],
+            [MID_MGR, MID_MGR, MID_MGR, OFF, A_MGR, A_MGR, K_MGR],
+            [K_MGR, K_MGR, OFF,   A_MGR, A_MGR, K_MGR, MID_MGR],
+            [MID_MGR, OFF,   A_MGR, A_MGR, K_MGR, K_MGR, A_MGR]
+        ],
+        "Göktuğ Gökdemir": [
+            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   K_MGR],
+            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   MID_MGR, A_MGR],
+            [MID_MGR, MID_MGR, MID_MGR, MID_MGR, K_MGR, OFF,   A_MGR],
+            [K_MGR, K_MGR, K_MGR, K_MGR, OFF,   A_MGR, K_MGR]
+        ]
     }
 
-    # 2. 7 ESNEK FULL-TIME BARİSTA İÇİN HER HAFTA FARKLI VARDİYA VEREN VE ASLA CLOPEN YAPMAYAN 7'Lİ ŞABLON HAVUZU:
+    # 2. 7 ESNEK FULL-TIME BARİSTA İÇİN HER HAFTA FARKLI BİR VARDİYA ŞABLONU (7'Lİ GÜVENLİ DÖNGÜ):
     flawless_pool = [
-        [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT],
-        [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT],
-        [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],
-        [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, K_FT],
-        [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT],
-        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF],
-        [K_FT, K_FT, K_FT, OFF, ARA_10, A_FT, A_FT]
+        [OFF, K_FT, K_FT, K_FT, ARA_12, A_FT, A_FT], # 0
+        [K_FT, OFF, A_FT, ARA_10, A_FT, K_FT, K_FT], # 1
+        [K_FT, K_FT, OFF, A_FT, A_FT, A_FT, K_FT],   # 2
+        [K_FT, K_FT, ARA_12, A_FT, A_FT, OFF, K_FT], # 3
+        [ARA_10, K_FT, K_FT, K_FT, OFF, A_FT, A_FT], # 4
+        [ARA_12, A_FT, A_FT, K_FT, K_FT, K_FT, OFF], # 5
+        [K_FT, K_FT, K_FT, OFF, ARA_10, A_FT, A_FT]  # 6
     ]
 
     flex_names = ["Ceyda Işık", "Yusuf Efe Aydoğmuş", "Elif Karaca", "Cansu Yüksel", "Ebrar Sena Akkaya", "Ahmet Emre Demren", "Ayça Yiğit"]
     
-    # Her ay ve butona tıklamada başlangıç sırasını dinamik olarak karıştır
+    # Aylık tohumla permütasyon oluştur
     perm = list(range(len(flex_names)))
     rng.shuffle(perm)
 
-    # Part-Time Şablonları (Her hafta kesin 4 gün = 28s, 4 haftada 112s):
-    emir_shifts = [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF]
-    hayru_shifts = [OFF, OFF, A_PT, A_PT, OFF, K_PT, K_PT]
+    # Part-Time Baristalar için 4 haftalık değişken çalışma günleri (Haftada kesin 28s = 4 gün):
+    emir_4weeks = [
+        [A_PT, A_PT, OFF, K_PT, K_PT, OFF, OFF],
+        [A_PT, OFF, A_PT, K_PT, K_PT, OFF, OFF],
+        [A_PT, A_PT, OFF, K_PT, OFF, K_PT, OFF],
+        [A_PT, OFF, A_PT, OFF, K_PT, K_PT, OFF]
+    ]
+    hayru_4weeks = [
+        [OFF, OFF, A_PT, A_PT, OFF, K_PT, K_PT],
+        [OFF, A_PT, OFF, A_PT, OFF, K_PT, K_PT],
+        [OFF, OFF, A_PT, A_PT, K_PT, OFF, K_PT],
+        [OFF, A_PT, OFF, A_PT, K_PT, OFF, K_PT]
+    ]
 
     for w_idx in range(4):
         s_d = w_idx * 7
-        mgr_sched = mgr_schedule_odd if w_idx % 2 == 0 else mgr_schedule_even
         
         for day in range(7):
             abs_d = s_d + day
             is_weekend = (day in [5, 6])
             
-            # Müdürlerin atanması (Asla aynı vardiyaya denk gelmezler)
+            # Müdürlerin haftalık değişen vardiyaları
             for m in ["Onur Kaynak", "Banu Sezer", "Göktuğ Gökdemir"]:
-                schedule[m][abs_d] = mgr_sched[m][day]
+                schedule[m][abs_d] = mgr_4weeks[m][w_idx][day]
 
-            schedule["Emir Altunbulak"][abs_d] = emir_shifts[day]
-            schedule["Hayrunnisa Erdoğan"][abs_d] = hayru_shifts[day]
+            schedule["Emir Altunbulak"][abs_d] = emir_4weeks[w_idx][day]
+            schedule["Hayrunnisa Erdoğan"][abs_d] = hayru_4weeks[w_idx][day]
 
             # Cansu Elibüyük: Pazartesi OFF, Hafta içi Açılış (Sal-Cum), Hafta sonu Kapanış (Cts-Paz)
             if day == 0:
@@ -209,9 +228,9 @@ def generate_armada_master_schedule(seed=None):
             else:
                 schedule["Buse Kayabalı"][abs_d] = K_FT
 
-            # 7 Esnek Barista: (perm[i] + w_idx) % 7 sayesinde HER HAFTA FARKLI BİR VARDİYA ALIR!
+            # 7 Esnek Barista: (perm[i] + w_idx * 2) % 7 sayesinde HER HAFTA TAMAMEN FARKLI VARDİYA ALIR!
             for i, b in enumerate(flex_names):
-                pat_idx = (perm[i] + w_idx) % len(flawless_pool)
+                pat_idx = (perm[i] + w_idx * 2) % len(flawless_pool)
                 schedule[b][abs_d] = flawless_pool[pat_idx][day]
 
     weeks_dict = {}
